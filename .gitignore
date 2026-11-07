@@ -1,0 +1,32 @@
+# --- secrets -------------------------------------------------------------
+.env
+*.key
+*.pem
+.streamlit/secrets.toml
+
+# --- confidential: scripts and anything that quotes or describes them -----
+*.txt
+*.md
+!README.md
+!DECISIONS.md
+!BUGS_FOUND.md
+!requirements.txt
+!requirements-dev.txt
+# synthetic test show (original content) is safe to commit
+!tests/fixtures/**
+outputs/
+llm_calls*.jsonl
+docs/
+eval/gold_moments.json
+eval/heldout_moments.json
+eval/*.private.json
+data/
+
+# --- caches, temp, local tooling -------------------------------------------
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.uploads/
+promo_finder/*.private.toml

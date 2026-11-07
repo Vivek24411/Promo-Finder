@@ -1,0 +1,90 @@
+EPISODE NUMBER: Episode 5
+EPISODE LOGLINE: In hospital, Mia learns she is pregnant - and Vivian pays the doctor to keep it hidden.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 00:56.55
+
+Actions and dialogue:
+
+CAMERA:
+Start: (00:00.00) | End: (00:06.35)
+Wide shot of a private hospital room.
+
+ACTION:
+Start: (00:00.40) | End: (00:05.15)
+Mia wakes slowly, bandages on her arm.
+
+CAMERA:
+Start: (00:06.35) | End: (00:12.57)
+Medium shot: the doctor checks the chart.
+
+DOCTOR (Gentle):
+Start: (00:06.75) | End: (00:11.38)
+"You were lucky. And the baby is fine."
+
+CAMERA:
+Start: (00:12.57) | End: (00:21.17)
+Snap zoom on Mia's face.
+
+MIA (Stunned):
+Start: (00:12.97) | End: (00:16.48)
+"The baby?"
+
+DOCTOR (Earnest):
+Start: (00:16.48) | End: (00:19.98)
+"You're eight weeks pregnant."
+
+CAMERA:
+Start: (00:21.17) | End: (00:26.27)
+Close-up on Mia's hand resting on her stomach.
+
+MIA (Tearful):
+Start: (00:21.57) | End: (00:25.07)
+"Does Ethan know?"
+
+CAMERA:
+Start: (00:26.27) | End: (00:34.75)
+Cut to the corridor: Vivian corners the doctor.
+
+VIVIAN (Cold, Commanding):
+Start: (00:26.67) | End: (00:33.55)
+"How much does it cost for this to stay out of her file?"
+
+CAMERA:
+Start: (00:34.75) | End: (00:44.35)
+Close-up on an envelope of cash pressed into the doctor's hand.
+
+DOCTOR (Shaken):
+Start: (00:35.15) | End: (00:38.65)
+"Mrs. Cole, I can't-"
+
+VIVIAN (Menacing):
+Start: (00:38.65) | End: (00:43.15)
+"You can. Or your license disappears."
+
+CAMERA:
+Start: (00:44.35) | End: (00:50.58)
+Push-in on Vivian looking through the window at Mia.
+
+VIVIAN (Sinister):
+Start: (00:44.75) | End: (00:49.38)
+"No one can ever know about this baby."
+
+CAMERA:
+Start: (00:50.58) | End: (00:56.55)
+Extreme close-up on Vivian's eyes.
+
+SOUND FX:
+Start: (00:50.98) | End: (00:55.35)
+A deep ominous rumble into silence.
+
+CAMERA:
+Start: (00:56.55) | End: (00:57.55)
+Cut to black.
+
+--- SCRIPT END ---

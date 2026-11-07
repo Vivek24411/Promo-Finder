@@ -1,0 +1,86 @@
+EPISODE NUMBER: Episode 9
+EPISODE LOGLINE: At a charity event, the keynote speaker is Mia's mother Elena - believed dead for fifteen years.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 00:53.93
+
+Actions and dialogue:
+
+**CAMERA:**
+Start: (00:00.00) | End: (00:07.85)
+Wide shot of a charity auditorium.
+
+**ACTION:**
+Start: (00:00.40) | End: (00:06.65)
+Mia takes her seat beside Ethan as the lights dim.
+
+**CAMERA:**
+Start: (00:07.85) | End: (00:14.45)
+Medium shot on the host at the podium.
+
+**HOST (Warm):**
+Start: (00:08.25) | End: (00:13.25)
+"Please welcome our founder, Elena Reyes."
+
+**CAMERA:**
+Start: (00:14.45) | End: (00:20.42)
+Close-up on Mia as a woman walks on stage.
+
+**ACTION:**
+Start: (00:14.85) | End: (00:19.23)
+Mia's program slips from her hands.
+
+**CAMERA:**
+Start: (00:20.42) | End: (00:25.52)
+Push-in on Mia, eyes wide.
+
+**MIA (Whispering, Stunned):**
+Start: (00:20.82) | End: (00:24.32)
+"Mom?"
+
+**CAMERA:**
+Start: (00:25.52) | End: (00:30.62)
+Wide shot: Mia stands and walks toward the stage.
+
+**ELENA (Trembling):**
+Start: (00:25.92) | End: (00:29.42)
+"Mia... my baby."
+
+**CAMERA:**
+Start: (00:30.62) | End: (00:38.23)
+Close-up as they face each other.
+
+**MIA (Sobbing):**
+Start: (00:31.02) | End: (00:37.02)
+"You're alive? They told me you died in the fire."
+
+**CAMERA:**
+Start: (00:38.23) | End: (00:44.08)
+Medium shot as Elena holds Mia's face.
+
+**ELENA (Tearful):**
+Start: (00:38.62) | End: (00:42.88)
+"I had to disappear to protect you."
+
+**CAMERA:**
+Start: (00:44.08) | End: (00:53.93)
+Extreme close-up on Elena's eyes hardening.
+
+**ELENA (Grave):**
+Start: (00:44.48) | End: (00:48.98)
+"And Vivian Cole is the reason I did."
+
+**SOUND FX:**
+Start: (00:48.98) | End: (00:52.73)
+An ominous swell into silence.
+
+**CAMERA:**
+Start: (00:53.93) | End: (00:54.93)
+Cut to black.
+
+--- SCRIPT END ---

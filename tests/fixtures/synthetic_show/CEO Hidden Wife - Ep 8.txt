@@ -1,0 +1,86 @@
+EPISODE NUMBER: Episode 8
+EPISODE LOGLINE: A quiet day at the beach house: Mia tells Ethan about the baby and they finally find peace.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 00:49.18
+
+Actions and dialogue:
+
+**CAMERA:**
+Start: (00:00.00) | End: (00:07.10)
+Wide shot of a sunlit beach house, waves rolling in.
+
+**ACTION:**
+Start: (00:00.40) | End: (00:05.90)
+Mia and Ethan walk barefoot along the shore.
+
+**CAMERA:**
+Start: (00:07.10) | End: (00:12.70)
+Medium two-shot as they sit on the porch steps.
+
+**ETHAN (Gentle):**
+Start: (00:07.50) | End: (00:11.50)
+"No reporters. No board. Just us."
+
+**CAMERA:**
+Start: (00:12.70) | End: (00:17.80)
+Close-up on Mia taking his hand.
+
+**MIA (Soft):**
+Start: (00:13.10) | End: (00:16.60)
+"I'm pregnant, Ethan."
+
+**CAMERA:**
+Start: (00:17.80) | End: (00:26.40)
+Close-up on Ethan, a slow smile spreading.
+
+**ETHAN (Tender):**
+Start: (00:18.20) | End: (00:21.70)
+"We're having a baby?"
+
+**MIA (Warm):**
+Start: (00:21.70) | End: (00:25.20)
+"We are."
+
+**CAMERA:**
+Start: (00:26.40) | End: (00:31.75)
+Medium shot as he pulls her into an embrace.
+
+**ACTION:**
+Start: (00:26.80) | End: (00:30.55)
+They embrace, laughing softly.
+
+**CAMERA:**
+Start: (00:31.75) | End: (00:36.85)
+Close-up on their hands intertwined.
+
+**ETHAN (Sincere):**
+Start: (00:32.15) | End: (00:35.65)
+"Thank you for staying."
+
+**CAMERA:**
+Start: (00:36.85) | End: (00:44.08)
+Wide shot of the sunset over the water.
+
+**ACTION:**
+Start: (00:37.25) | End: (00:42.88)
+They watch the sun go down, calm and content.
+
+**CAMERA:**
+Start: (00:44.08) | End: (00:49.18)
+Slow push-in on the horizon.
+
+**SOUND FX:**
+Start: (00:44.48) | End: (00:47.98)
+Gentle strings fade out.
+
+**CAMERA:**
+Start: (00:49.18) | End: (00:50.18)
+Cut to black.
+
+--- SCRIPT END ---

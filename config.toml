@@ -1,0 +1,118 @@
+# Promo Finder configuration. Read by the CLI (run.py), the web app (app.py) and evaluate.py.
+# Every number is explained in DECISIONS.md.
+
+# Which scoring behaviour to use. "v6" = v4 + the changes that held up in the ablation (default).
+# "v4" = the submitted version, still reproducible from cache with --scoring-preset v4.
+scoring_preset = "v6"
+
+[llm]
+preset = "none"          # none | gemini | groq | openrouter | openai | ollama | anthropic
+# model = "gemini-3.5-flash-lite"
+# base_url = "https://your-gateway/v1"   # any OpenAI-compatible endpoint
+# api_key_env = "MY_KEY_ENV_VAR"
+
+[paths]
+cache_dir = ".cache/llm"                       # read + write
+cache_readonly_dirs = [".cache/v4_snapshot"]   # read only: keeps v4 reproducible after "clear cache"
+outputs_dir = "outputs"
+
+[eval]
+gold_path = "eval/gold_moments.json"           # gitignored; schema in eval/gold_moments.example.json
+heldout_path = "eval/heldout_moments.json"     # gitignored; you write it (template in eval/)
+
+# Rate limits, concurrency and prices per provider preset. price_* = USD per 1M tokens
+# (0 = free tier / unknown; set it to see cost estimates). structured = json_object | json_schema
+[providers.default]
+rpm = 12
+tpm = 0              # tokens per minute (0 = no token limit)
+workers = 3
+timeout = 120        # seconds per call
+max_retries = 6
+
+[providers.gemini]
+rpm = 12             # free tier is strict and often returns 503 under load
+workers = 3
+
+[providers.groq]
+rpm = 25
+tpm = 12000
+workers = 3
+
+[providers.anthropic]
+rpm = 50
+workers = 6
+price_in = 4.0       # claude-opus-5-5 list price; claude-haiku-5-5 is 0.10 / 0.50
+price_out = 20.0
+
+[providers.ollama]
+rpm = 1000
+workers = 1          # one local GPU
+
+# ---------------------------------------------------------------------------------------------
+# Scoring presets. v4 uses the built-in defaults (listed in promo_finder/config.py), so the
+# [scoring_presets.v4] table is empty on purpose. Other presets override only what they change.
+[scoring_presets.v4]
+
+[scoring_presets.v5]
+lexicon = "generic"              # 2c: generic microdrama tropes only...
+show_profile = true              # ...plus show-specific words from one LLM call
+miner_prompt = "v5"              # 4c: emotional_reveal hook type
+emotional_reveal_exempt = true   # 4c
+resolve_on_calm_tone = false     # 4c: tender tone alone no longer counts as "resolved"
+judge_prompt = "v5"              # 4b: yes/no cliffhanger checks
+cliff_mode = "blend"             # 4b
+standalone_mode = "gate"         # 4a
+standalone_threshold = 0.5
+rerank = true                    # 4b: listwise rerank of the top 10
+stitched_min_standalone = 0.5    # 4d
+max_stitched_in_top = 3          # 4d
+
+# Single-change presets, used by `evaluate.py --ablation` (v4 + one change each)
+[scoring_presets.v4_standalone_geometric]
+standalone_mode = "geometric"
+
+[scoring_presets.v4_standalone_gate]
+standalone_mode = "gate"
+
+[scoring_presets.v4_stitched_rules]
+stitched_min_standalone = 0.5
+max_stitched_in_top = 3
+
+[scoring_presets.v4_calm_not_resolved]
+resolve_on_calm_tone = false
+
+[scoring_presets.v4_cliff_checks]
+judge_prompt = "v5"
+cliff_mode = "blend"
+
+[scoring_presets.v4_rerank]
+rerank = true
+
+[scoring_presets.v4_emotional]
+miner_prompt = "v5"
+emotional_reveal_exempt = true
+resolve_on_calm_tone = false
+
+[scoring_presets.v4_show_profile]
+lexicon = "generic"
+show_profile = true
+
+# Ablation building blocks
+[scoring_presets.no_judge]
+judge_enabled = false
+
+[scoring_presets.miner_only]
+judge_enabled = false
+w_llm = 1.0
+
+# v6 = v4 + only the changes that did NOT hurt in the ablation (see outputs/ablation/ablation.md):
+#   show profile + generic lexicon (5h: makes the tool show-agnostic), needs-context gate (5b),
+#   stitched-promo safeguards (5c). Dropped: emotional exemption (5g), calm!=resolved (5d),
+#   yes/no cliffhanger checks (5e) - each lost moments and/or did not spread the scores.
+[scoring_presets.v6]
+lexicon = "generic"
+show_profile = true
+standalone_mode = "gate"
+standalone_threshold = 0.5
+stitched_min_standalone = 0.5
+max_stitched_in_top = 3

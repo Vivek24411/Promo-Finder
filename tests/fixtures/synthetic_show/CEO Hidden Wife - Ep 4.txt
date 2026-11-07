@@ -1,0 +1,90 @@
+EPISODE NUMBER: Episode 4
+EPISODE LOGLINE: Mia finds proof that Chloe framed her - and Chloe's car comes for her in the parking garage.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 01:02.68
+
+Actions and dialogue:
+
+**CAMERA:**
+start: 00:00.00 - end: 00:07.85
+Wide shot of an empty office at night.
+
+**ACTION:**
+start: 00:00.40 - end: 00:06.65
+Mia searches Chloe's desk with a phone flashlight.
+
+**CAMERA:**
+start: 00:07.85 - end: 00:20.45
+Close-up on a phone screen lighting up in the drawer.
+
+**ACTION:**
+start: 00:08.25 - end: 00:15.75
+Mia reads a message: 'Transfer done. She'll never prove it.'
+
+**MIA (Whispering, Shocked):**
+start: 00:15.75 - end: 00:19.25
+"Chloe... it was you."
+
+**CAMERA:**
+start: 00:20.45 - end: 00:26.05
+Medium shot: Mia hurries through a dark parking garage.
+
+**SOUND FX:**
+start: 00:20.85 - end: 00:24.85
+Footsteps echo off the concrete.
+
+**CAMERA:**
+start: 00:26.05 - end: 00:31.15
+Close-up on Mia dialing; the call fails.
+
+**MIA (Breathless):**
+start: 00:26.45 - end: 00:29.95
+"Come on, Ethan, pick up."
+
+**CAMERA:**
+start: 00:31.15 - end: 00:36.25
+Wide shot: headlights flare on behind her.
+
+**SOUND FX:**
+start: 00:31.55 - end: 00:35.05
+An engine roars to life.
+
+**CAMERA:**
+start: 00:36.25 - end: 00:42.10
+Snap zoom on Chloe behind the wheel, eyes cold.
+
+**CHLOE (Venomous):**
+start: 00:36.65 - end: 00:40.90
+"You should have stayed a waitress."
+
+**CAMERA:**
+start: 00:42.10 - end: 00:54.83
+Low angle as the car speeds straight at Mia.
+
+**ACTION:**
+start: 00:42.50 - end: 00:49.25
+The car slams into Mia; she crashes onto the concrete.
+
+**SOUND FX:**
+start: 00:49.25 - end: 00:53.62
+A sickening crash, tires screaming.
+
+**CAMERA:**
+start: 00:54.83 - end: 01:02.68
+Extreme close-up on Mia's phone on the ground, Ethan's name calling.
+
+**SOUND FX:**
+start: 00:55.23 - end: 01:01.48
+The phone keeps ringing; the screen cuts to black.
+
+**CAMERA:**
+start: 01:02.68 - end: 01:03.68
+Cut to black.
+
+--- SCRIPT END ---

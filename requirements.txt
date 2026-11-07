@@ -1,0 +1,3 @@
+streamlit>=1.50
+# optional, only needed for --preset anthropic
+anthropic>=1.0

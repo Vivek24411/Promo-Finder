@@ -1,0 +1,94 @@
+EPISODE NUMBER: Episode 3
+EPISODE LOGLINE: Chloe frames Mia for leaking company secrets in front of the whole board.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 01:12.67
+
+Actions and dialogue:
+
+**CAMERA:**
+Start: (0:00:00.00) | End: (0:00:10.35)
+Wide shot of a glass boardroom high above the city.
+
+**ACTION:**
+Start: (0:00:00.40) | End: (0:00:09.15)
+Board members sit in silence as Chloe stands at the head of the table.
+
+**CAMERA:**
+Start: (0:00:10.35) | End: (0:00:19.82)
+Medium shot on Chloe holding up a USB drive.
+
+**CHLOE (Accusing):**
+Start: (0:00:10.75) | End: (0:00:18.62)
+"This was found in her bag. Our launch files. Sold to our rival."
+
+**CAMERA:**
+Start: (0:00:19.82) | End: (0:00:26.80)
+Close-up on Mia at the door, holding a coffee tray.
+
+**MIA (Incredulous):**
+Start: (0:00:20.22) | End: (0:00:25.60)
+"That's not mine. I've never seen it before."
+
+**CAMERA:**
+Start: (0:00:26.80) | End: (0:00:39.27)
+Whip pan to two security guards grabbing Mia.
+
+**ACTION:**
+Start: (0:00:27.20) | End: (0:00:34.57)
+The guards seize Mia; the coffee tray crashes to the floor.
+
+**SOUND FX:**
+Start: (0:00:34.57) | End: (0:00:38.07)
+Ceramic shatters.
+
+**CAMERA:**
+Start: (0:00:39.27) | End: (0:00:47.88)
+Medium shot: Ethan enters, jaw tight.
+
+**ETHAN (Cold):**
+Start: (0:00:39.67) | End: (0:00:43.17)
+"What is going on here?"
+
+**CHLOE (Gloating):**
+Start: (0:00:43.17) | End: (0:00:46.67)
+"Your wife is a spy, Ethan."
+
+**CAMERA:**
+Start: (0:00:47.88) | End: (0:00:57.10)
+Close-up on the laptop screen showing a transfer receipt in Mia's name.
+
+**BOARD MEMBER (Outraged):**
+Start: (0:00:48.27) | End: (0:00:55.90)
+"Two hundred thousand dollars, paid to her account last night."
+
+**CAMERA:**
+Start: (0:00:57.10) | End: (0:01:02.20)
+Push-in on Mia, tears in her eyes.
+
+**MIA (Pleading):**
+Start: (0:00:57.50) | End: (0:01:01.00)
+"Ethan, you know me. Please."
+
+**CAMERA:**
+Start: (0:01:02.20) | End: (0:01:12.67)
+Extreme close-up on Ethan's unreadable face.
+
+**ETHAN (Grave):**
+Start: (0:01:02.60) | End: (0:01:06.47)
+"Mia. Look at me. Did you do it?"
+
+**SOUND FX:**
+Start: (0:01:06.47) | End: (0:01:11.47)
+Silence, then a sharp cliffhanger sting.
+
+**CAMERA:**
+Start: (0:01:12.67) | End: (0:01:13.67)
+Cut to black.
+
+--- SCRIPT END ---

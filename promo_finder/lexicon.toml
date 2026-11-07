@@ -1,0 +1,47 @@
+# Keyword lists for the rule signals (regex, case-insensitive). Each entry is [weight, pattern].
+#
+#   v4_legacy - the exact v4 lists live in lexicon_v4_legacy.private.toml (gitignored: they contain
+#               words specific to the confidential show). Without that file, v4 falls back to `generic`.
+#   generic   - microdrama tropes that work for ANY show (v5). Show-specific words are not
+#               hand-written any more: they come from the per-show "show profile" LLM call.
+#
+# Shared lists (tones, camera, cliffhanger, resolution) are the same in both.
+
+[shared]
+hot_emotions = { furious = 1.0, screaming = 1.0, shouting = 0.9, venomous = 0.9, cruel = 0.9, menacing = 0.9, threatening = 0.9, sinister = 0.8, chilling = 0.8, outraged = 0.9, mocking = 0.8, taunting = 0.8, spiteful = 0.8, scornful = 0.7, gloating = 0.8, derisive = 0.7, desperate = 0.8, sobbing = 0.7, weeping = 0.6, pleading = 0.6, horrified = 0.9, stunned = 0.7, incredulous = 0.7, accusatory = 0.7, accusing = 0.7, commanding = 0.5, cold = 0.5, defiant = 0.6, fierce = 0.6, smug = 0.5, dismissive = 0.5, condescending = 0.5, arrogant = 0.5, gasping = 0.7, alarmed = 0.7, shaken = 0.5 }
+calm_emotions = ["gentle", "tender", "soft", "reassuring", "warm", "calm", "amused", "sincere", "affectionate", "relieved", "content", "loving", "playful", "earnest", "soothing"]
+intense_camera = 'crash zoom|snap zoom|whip pan|smash cut|extreme close|slow[- ]motion|push-?in|rack focus|dutch|handheld|jolt'
+cliff_text = [
+  [1.0, 'cliffhanger|cut to black|smash cut to black|\bfreeze\b|abrupt(ly)? cut|into silence'],
+  [0.9, 'burst(s|ing)? (open|in|through)|storm(s|ing)? in|door (flies|bursts|crashes)|\barriv\w+|\bappears?\b|\bfootsteps\b|silhouette'],
+  [0.8, 'ominous|\bsting\b|\bswell\w*|drone|\brumble\w*|\bdread\b|unresolved|tension'],
+  [0.7, 'eyes (widen|go wide)|\bfrozen\b|\bstunned\b|horror|\bshock\w*|jaw (drops|tightens)|\bpales?\b'],
+]
+resolution_text = 'embrace\w*|\bhug\w*|\bsmil\w+|\blaugh\w*|relief|\bpeace\w*|\bsafe\b|\bsleep\w*|fade[- ]?out|gentle|tender|warmth|\bthank you\b|\bcontent\w*|\bsoftly\b|\bnuzzl\w*|serene|\bcalm\w*'
+threat_line = '\bor (else|you|he|she|i)\b|\bunless\b|\bif you\b|\bbefore (dawn|nightfall|sunrise|the)\b|\bwill (hang|burn|die|pay|regret|be)\b|\bwhen i\b|\bwho (are|is) (you|he|she)\b'
+
+[generic]
+# Removed vs v4_legacy: every word that only fits one show or one period setting (see DECISIONS.md).
+# Added (cross-genre microdrama tropes): drinks thrown, documents torn, guns, car crashes, kidnapping,
+# hidden identity, paternity/DNA, amnesia, twins, affairs, firing, bankruptcy, contract marriage, revenge.
+physical = [
+  [1.0, '\bslap\w*|\bstrik(e|es|ing)\b|\bstruck\b|\bwhip\w*|\bpunch\w*|backhand|\bkick\w*'],
+  [0.9, 'explo\w+|detonat\w+|ablaze|inferno|\bflames?\b|set (it )?on fire|burst(s|ing)? (open|through|in)|car (crash|accident)|\bcrash(es|ed)?\b'],
+  [0.9, '\bblood\w*|\bwound\w*|lacerat\w+|\bbleed\w*|\bknife\b|\bdagger\b|\bsword\b|\bblade\b|\bgun\w*|\bshot\b|\bpistol\b'],
+  [0.8, '\bseiz\w+|\bgrab\w*|\bshove\w*|\bdrag\w*|\bthrow\w*|\bhurl\w*|\bchains?\b|\bchained\b|handcuff\w*|kidnap\w*|tied up'],
+  [0.8, 'collaps\w+|\bfaint\w*|\bchok\w+|\bstrangl\w+|crash(es|ing)? (into|to)|falls? to (her|his) knees|pushed (down|off)'],
+  [0.8, '(throws?|splash\w*|pours?) (a |the |her |his )?(drink|wine|water|coffee)|tears? up the|rips? up the'],
+  [0.7, '(drops?|kneel\w*|sinks?) (to|on(to)?) (one|a|his|her) knee|\bproposal\b|\bkiss\w*'],
+  [0.6, '\bscream\w*|\bgasp\w*|\bshatter\w*|\bsmash\w*|\bslam\w*'],
+]
+reveal = [
+  [1.0, 'true identity|hidden identity|real (father|mother|heir|name)|rightful heir|\bheir(ess)?\b|presumed dead|back from the dead|still alive|\bdna\b|paternity'],
+  [0.9, '\bpoison\w*|\bframe[ds]?\b|\barrest\w*|\bprison\b|\bjail\b|\bbankrupt\w*|\bamnesia\b|\btwin\b|\badopted\b'],
+  [0.8, '\bbetray\w*|\babandon\w*|disown\w*|\bjilt\w*|\bmistress\b|\baffair\b|\bcheat\w*|\bpregnan\w+|\bdivorc\w+|\binvalid\b|\bfired\b|contract marriage|\brevenge\b'],
+  [0.6, '\bsecret\w*|\breveal\w*|\bunmask\w*|\bconfess\w*|\bproof\b|\bthe truth\b'],
+]
+shock_line = [
+  [1.0, '''how dare|you('re| are) nothing|worthless|beneath (me|us)|kill (him|her|you)|you('re| are) fired|i('m| am) pregnant'''],
+  [0.8, '\bmarry me\b|\bwife\b|\bhusband\b|\bdisgrace\w*|\bshame\w*|\bbeg\b|on your knees|get out|sign the divorce'],
+  [0.6, '\bnever\b|\bdie\b|\bdead\b|\bdeath\b|\bsecurity!|\barrest\b'],
+]

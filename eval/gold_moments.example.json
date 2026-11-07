@@ -1,0 +1,7 @@
+{
+  "_about": "SCHEMA EXAMPLE with made-up content. The real dev set lives in eval/gold_moments.json (gitignored, path set in config.toml [eval]). Times are seconds from the start of the episode. A promo 'covers' a moment if a segment overlaps >= half of [start, end] (or 8 s for long moments); 'key' is the single instant that makes the moment (the slap, the line) used by key@K.",
+  "moments": [
+    {"id": "G01", "episode": 1, "start": 12.0, "end": 24.5, "key": 18.2, "what": "Placeholder: a public humiliation at a party"},
+    {"id": "G02", "episode": 3, "start": 40.0, "end": 55.0, "key": 51.0, "what": "Placeholder: a hidden identity is revealed"}
+  ]
+}

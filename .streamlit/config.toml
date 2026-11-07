@@ -1,0 +1,21 @@
+[browser]
+gatherUsageStats = false      # no telemetry (Streamlit sends usage stats by default)
+
+[client]
+toolbarMode = "minimal"       # no developer menu / deploy button in the editor's view
+showErrorDetails = "none"     # never show raw stack traces to users
+
+[server]
+maxUploadSize = 100           # MB - a 50-episode show is well under 1 MB
+
+[theme]
+base = "light"
+primaryColor = "#1C1A17"
+backgroundColor = "#F6F4EF"
+secondaryBackgroundColor = "#EDE9E1"
+textColor = "#1C1A17"
+borderColor = "#DED8CC"
+showWidgetBorder = true
+baseRadius = "8px"
+font = "Inter, -apple-system, 'Segoe UI', system-ui, sans-serif"
+codeFont = "'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace"

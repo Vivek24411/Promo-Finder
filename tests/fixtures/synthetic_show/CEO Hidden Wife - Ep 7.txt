@@ -1,0 +1,90 @@
+EPISODE NUMBER: Episode 7
+EPISODE LOGLINE: The contract marriage goes public; Ethan proposes to Mia for real - but she has a secret first.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 01:02.05
+
+Actions and dialogue:
+
+**CAMERA:**
+Start: (00:00.0) | End: (00:07.1)
+Wide shot: reporters swarm Mia outside the building.
+
+**REPORTER (Mocking):**
+Start: (00:00.4) | End: (00:05.9)
+"Mia! How much did he pay you to be his wife?"
+
+**CAMERA:**
+Start: (00:07.1) | End: (00:14.6)
+Close-up on Mia shielding her face.
+
+**ACTION:**
+Start: (00:07.5) | End: (00:13.4)
+Someone shoves Mia; she stumbles against a car.
+
+**CAMERA:**
+Start: (00:14.6) | End: (00:19.7)
+Medium shot: Ethan pushes through the crowd.
+
+**ETHAN (Commanding):**
+Start: (00:15.0) | End: (00:18.5)
+"Get away from her. Now."
+
+**CAMERA:**
+Start: (00:19.7) | End: (00:28.3)
+Wide shot as the crowd falls silent around them.
+
+**ACTION:**
+Start: (00:20.1) | End: (00:27.1)
+Ethan drops to one knee on the pavement, holding a ring.
+
+**CAMERA:**
+Start: (00:28.3) | End: (00:35.1)
+Close-up on the ring box opening.
+
+**ETHAN (Earnest):**
+Start: (00:28.7) | End: (00:33.9)
+"No contract this time. Marry me. For real."
+
+**CAMERA:**
+Start: (00:35.1) | End: (00:42.7)
+Push-in on Mia, tears in her eyes.
+
+**MIA (Tearful):**
+Start: (00:35.5) | End: (00:41.5)
+"Ethan, there's something you need to know first."
+
+**CAMERA:**
+Start: (00:42.7) | End: (00:52.8)
+Close-up on Ethan's phone buzzing.
+
+**SOUND FX:**
+Start: (00:43.1) | End: (00:48.1)
+The phone vibrates against the pavement.
+
+**ETHAN (Alarmed):**
+Start: (00:48.1) | End: (00:51.6)
+"It's the hospital."
+
+**CAMERA:**
+Start: (00:52.8) | End: (01:02.1)
+Extreme close-up on Mia's face going pale.
+
+**MIA (Breathless):**
+Start: (00:53.2) | End: (00:56.7)
+"What did they tell you?"
+
+**SOUND FX:**
+Start: (00:56.7) | End: (01:00.9)
+Silence into a cliffhanger sting.
+
+**CAMERA:**
+Start: (01:02.1) | End: (01:03.1)
+Cut to black.
+
+--- SCRIPT END ---

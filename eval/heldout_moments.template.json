@@ -1,0 +1,6 @@
+{
+  "_about": "TEMPLATE for YOUR held-out set. Copy to eval/heldout_moments.json (gitignored), replace the placeholders with moments you choose yourself, then run: python scripts/validate_moments.py eval/heldout_moments.json --show <folder>. Choose moments BEFORE looking at the tool's output for those episodes. Every evaluation on this file is logged in eval/heldout_ledger.log.",
+  "moments": [
+    {"id": "H01", "episode": 0, "start": 0.0, "end": 0.0, "key": 0.0, "what": "describe the moment in a few words"}
+  ]
+}

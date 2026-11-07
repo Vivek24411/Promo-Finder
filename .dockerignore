@@ -1,0 +1,18 @@
+# Never put keys, scripts, model replies, gold sets or outputs into the image.
+.env
+*.pem
+*.key
+.cache/
+outputs/
+docs/
+eval/*.json
+eval/*.log
+llm_calls*.jsonl
+promo_finder/*.private.toml
+.venv/
+.git/
+**/__pycache__/
+.pytest_cache/
+deploy/
+Dockerfile
+.dockerignore

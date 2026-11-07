@@ -1,0 +1,86 @@
+EPISODE NUMBER: Episode 6
+EPISODE LOGLINE: Ethan exposes Chloe at a press conference - and Chloe threatens to reveal the contract marriage.
+CONTINUITY NOTES: Synthetic test episode.
+
+--- SCRIPT START ---
+
+SCENE 01
+Scene heading: INT./EXT. - VARIOUS
+Scene start: 00:00.00
+Scene end: 00:55.43
+
+Actions and dialogue:
+
+**CAMERA:**
+Start: (00:00.00) | End: (00:05.22)
+Wide shot of a packed press room, cameras flashing.
+
+**ACTION:**
+Start: (00:00.40) | End: (00:04.03)
+Ethan steps up to the podium.
+
+**CAMERA:**
+Start: (00:05.22) | End: (00:11.95)
+Medium shot on Ethan.
+
+**ETHAN (Cold):**
+Start: (00:05.62)
+"Last night someone tried to kill my wife."
+
+**CAMERA:**
+Start: (00:11.95) | End: (00:18.67)
+Close-up on a screen behind him showing security footage of Chloe's car.
+
+**SOUND FX:**
+Start: (00:12.35) | End: (00:17.48)
+The room erupts; cameras click like rain.
+
+**CAMERA:**
+Start: (00:18.67) | End: (00:23.90)
+Whip pan to Chloe at the back of the room, frozen.
+
+**REPORTER (Urgent):**
+Start: (00:19.07) | End: (00:22.70)
+"Miss Vance, is that your car?"
+
+**CAMERA:**
+Start: (00:23.90) | End: (00:30.62)
+Medium shot: Chloe pushes through the crowd toward the stage.
+
+**CHLOE (Furious):**
+Start: (00:24.30) | End: (00:29.42)
+"You think you've won? You've won nothing."
+
+**CAMERA:**
+Start: (00:30.62) | End: (00:39.98)
+Close-up on Chloe leaning into Ethan's microphone.
+
+**CHLOE (Venomous):**
+Start: (00:31.02) | End: (00:38.77)
+"If I go down, I'll tell them all about your contract marriage."
+
+**CAMERA:**
+Start: (00:39.98) | End: (00:46.08)
+Push-in on Ethan, jaw tight.
+
+**ETHAN (Threatening):**
+Start: (00:40.38) | End: (00:44.88)
+"Say one more word and I'll bury you."
+
+**CAMERA:**
+Start: (00:46.08) | End: (00:55.43)
+Extreme close-up on Chloe's smile.
+
+**CHLOE (Gloating):**
+Start: (00:46.48) | End: (00:49.98)
+"Then I'll say it anyway."
+
+**SOUND FX:**
+Start: (00:49.98) | End: (00:54.23)
+A cliffhanger sting cuts to black.
+
+**CAMERA:**
+Start: (00:55.43) | End: (00:56.43)
+Cut to black.
+
+--- SCRIPT END ---
