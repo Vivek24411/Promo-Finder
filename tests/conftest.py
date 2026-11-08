@@ -14,7 +14,11 @@ SYNTHETIC = ROOT / "tests" / "fixtures" / "synthetic_show"
 
 @pytest.fixture(scope="session")
 def mock_server():
-    with MockLLM() as m:
+    try:
+        server = MockLLM()
+    except PermissionError:
+        pytest.skip("HTTP integration requires sockets, which this sandbox disables; in-process adapter tests still run")
+    with server as m:
         yield m
 
 

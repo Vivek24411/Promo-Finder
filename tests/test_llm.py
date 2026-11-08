@@ -129,7 +129,7 @@ def _fake_anthropic(monkeypatch, behaviour):
     class Client:
         def __init__(self, **kw):
             Client.kw = kw
-            self.beta = types.SimpleNamespace(messages=Messages())
+            self.messages = Messages()
 
     monkeypatch.setattr(anthropic, "Anthropic", Client)
     return Client, Messages
@@ -145,6 +145,7 @@ def test_anthropic_adapter_happy_path(monkeypatch, tmp_path):
     llm = LLM(provider="anthropic", model="claude-haiku-5-5", api_key=FAKE_KEY, cache_dir=str(tmp_path))
     assert llm.json("sys", "user", tag="t") == {"ok": True}
     assert Messages.last["model"] == "claude-haiku-5-5" and Messages.last["system"] == "sys"
+    assert "fallbacks" not in Messages.last and "betas" not in Messages.last
     assert "temperature" not in Messages.last          # sampling params are rejected by current Claude models
     assert llm.stats["in_tokens"] == 10
 

@@ -105,3 +105,57 @@ noise plus the judge batch effect (O8), so read the table as "no evidence of imp
 
 What the table really says: the cold-viewer judge is the big lever (8 → 13 of 20). The next gains are
 more likely to come from a stronger judge model, or one clip per judge call (fixing O8), than from more rules.
+
+## v7: verified eligibility (the default)
+
+v4–v6 computed checks but didn't act on them, so a clip could fail a check and still be ranked #3 (BUGS_FOUND B16–B23). v7 separates **eligibility** (may this clip be recommended?) from **quality** (how good is it?), and decides eligibility in one place: `promo_finder/eligibility.py`.
+
+| Decision | Why |
+|---|---|
+| **Statuses: recommended / review / rejected.** Any fail → rejected; any uncertain → review; all pass → recommended. | A clip that fails the brief isn't a promo, however high it scores. "Uncertain" exists so that a missing or unsupported answer never turns into a pass. |
+| **Scores rank only recommended clips; `top_k` is a maximum.** | Weighted scores can't override a failed check. Returning 9 verified promos beats padding to 25 with failures. |
+| **Deterministic checks (code):** duration (±0.05 s rounding tolerance), source bounds, segment order, cuts between spoken lines. | These are facts about timestamps, so code decides them. |
+| **Semantic checks (judge + code):** hook in the first 3 s, unresolved ending, a new viewer follows, and the cut (two-segment promos). | These need understanding, so the judge answers each one as pass/fail/uncertain and cites beat refs. Code then checks that the evidence holds up. |
+| **A verdict counts only if its evidence holds up.** Hook: a cited beat starts in the first 3 s, or is at least half visible. Ending: a non-music beat in the final 5 s, a stated open question, and the clip mustn't answer that question itself. Standalone: a stated conflict plus a cited beat. Cut: a stated connection plus a beat from each side. | Turns "the model said so" into something checkable. A judge that cites a mid-clip line for the ending, or a music swell, gets "uncertain". |
+| **The ending is judged by the final moment's type** (`judge-v7.2`): suspense (something pending), resolution (tension released: a goal achieved, a search succeeds, a danger escaped, a scene closed in affection) or neutral, classified by what happens, not by tone. Only suspense passes. A resolution with cited `answered_by` beats is a confirmed fail and is re-cut before them. An open question that presupposes a resolution ("now that…") can't pass. | The `judge-v7.1` contract asked only for "the question the ending leaves open" and passed 72/72 endings (B27): a follow-on question can be written for any ending. Asking what the last moment *does* is harder to satisfy by rewording. |
+| **A verdict that contradicts the judge's own score is not trusted** (pass at ≤ 4/10, fail at ≥ 8/10). | This is the B16 failure: a 4/10 standalone rating passing as "understandable". |
+| **Rules can only send a clip to review, never pass it.** A strong rule hook (≥ 0.8, unblended) turns a judge "fail" into review. A visible resolution in the last beat (embrace, relief; never tone alone) turns a judge "pass" into review. A cut whose two sides share no named character turns a "pass" into review. | Disagreement goes to a human. Sharing a character is necessary but not sufficient, so it can't pass a cut on its own. |
+| **Judge v7: one clip per call.** Prompt `judge:v7`, schema `judge-v7.2`. | Fixes the batch effect (O8) and scopes beat refs to one clip. Costs about 5× v6's judge calls (≈ 85 calls for 50 episodes). The schema version is in the prompt text, so a changed contract changes every cache key: old judgments can't masquerade as new ones. |
+| **The judge sees only the selected footage**, in playback order (CAMERA, ACTION, dialogue, SFX), with partial beats marked. No logline, continuity notes or show profile. | A cold viewer has only the clip. Marking partial beats fixes B21. |
+| **Validation and bounded retries.** Structural problems (wrong clip id, missing section, bad verdict, unknown ref, non-numeric score) trigger up to `judge_retries = 2` extra calls, each listing the problems. What still fails stays missing and becomes "uncertain". | A malformed answer never silently passes. Retries use a different prompt, so they're cached separately and re-runs are deterministic. |
+| **Opening re-cuts** (`boundary_search = 4 s`, max 20 per run). For a shortlisted clip whose opening is weak, or starts after a strong physical beat has begun or just ended, search clean event boundaries (any shot, action, sound or line start not inside dialogue). Score each by "strongest beat starting in the first 3 s − 0.5 × share of a strong action already missed". Keep a re-cut only for a material gain (+0.1). | Captures the advertised action instead of its aftermath (B21). Both versions are judged normally; neither is forced into the ranking. |
+| **Ending repairs** (`repair_rounds = 2`, max 15 per round). When the judge cites the beat that answers the clip's own question, re-cut to the last clean cut-out before it. When the ending fails without such a beat, cut after the strongest earlier tension beat. | "Search for earlier unresolved endings." Two rounds, because the first re-cut can still show the answer (an object found, then grasped). |
+| **Every re-cut is a new clip.** Rule parts, duration and hook/cliff beats are recomputed. It carries no judgment, and a judgment is bound to the exact footage key (`Promo.key`). | Never reuse a judgment for different footage. `decide()` refuses a judgment whose key doesn't match. |
+| **Production cues aren't evidence** (`count_production_cues = false`). Calm tone alone isn't resolution (`resolve_on_calm_tone = false`). | The writers' "cliffhanger" note describes intent, not what the viewer sees (B20). Ablation 5d dropped the calm-tone change in v5 because it lost moments *under score-based ranking*. In v7 the ending is decided by the semantic check, so the rule no longer has to stand in for it. |
+| **Lexicon `generic_v7`** = `generic` + snatch / fling / wrench / yank / toss. | A snatched or thrown object is a visual hook the generic list missed. |
+| **Explanations.** "Why it works" and "limitations" are separate fields. Code replaces text with platform or performance claims or dismissive words with a template built from the cited evidence (`explanations_replaced` in `run_meta`). | B25. |
+| **One set of records behind every export.** `report.build_records` feeds JSON, CSV, Markdown and HTML. `run_meta.eligibility` is computed from the same `p.decision` / `p.checks`. | Reports and metrics can't disagree. A test checks that the IDs and statuses in the CSV and JSON match. |
+| **Rules-only runs recommend nothing.** Every clip goes to review, marked "not verified". | Without a model, nothing semantic has been verified, and the brief's semantic criteria can't be checked by keywords. |
+
+**Cost of v7** on the 50-episode pack (measured, gemini-3.5-flash-lite): 74 judge calls (72 clips + 1 validation retry + 1 ending repair), 148k input + 34k output tokens, 408 s wall clock on the free tier (12 requests/min). v6 used 12 batched judge calls. Profile and miner calls are unchanged and stay cached.
+
+**Measured outcome** (same pack): 73 clips evaluated → 56 eligible (25 returned: `top_k` is the cap), 7 review, 10 rejected (8 incoherent cuts, 2 endings the clip resolves itself). The judge passed hook and standalone for 73/73: the remaining weakness is judge leniency, not the contract. Dev-set recall@25 is unchanged from v6 (12/20); precision@10 is 4/10 against 7/10, inside the 95% intervals.
+
+## v8.0 — current implementation (2026-11-07)
+
+Earlier sections are historical experiments; README and docs/verification/v8.md describe current behavior. The v7 working-tree changes were preserved, with the new production orchestration in v8.py. A separate route avoids silently changing prior experimental results.
+
+- No keyword dependency in discovery, eligibility or ranking. Gemini selects grounded beat IDs and code retains multiple source-supported variants. This replaces v7's vocabulary-weighted shortlist and early NMS.
+- Cold-viewer judgment uses Claude per clip. A pass requires literal evidence and a complete supporting hook beat within three seconds; coarse screenplay timing therefore sends more clips to review. This is intentionally conservative, not a claim that those clips are poor.
+- Search limits: 14k-character target chunks, six overlapping beats plus four preceding factual beats; no truncation inside a beat. At most 80 candidate ends per start and 24 retained windows per episode; at most two segments, same episode, chronological. Cross-episode construction is deferred because it needs more source-context checks. The bounds are coverage limitations, not quality guarantees.
+- Default budget $2/run, unknown prices block payment, serial provider calls, 60 priority reviews plus six difficult cases and four low-rank samples, up to six one-time ending repairs. A single bounded comparison only ranks already passing clips. Sampling audits the bounded candidate pool, not all omitted windows.
+- Persistent SQLite reservations survive interruptions. Actual billing is unknown. File locks/cache keys prevent successful request duplication; ambiguous crashes preserve a pending marker instead of blindly retrying.
+- Human review uses immutable clip identities in an append-only decision file. Public mode accepts only synthetic sample material. Confidential source, excerpts, caches and raw outputs remain ignored.
+- Existing SDK fallback arguments were removed so Claude cannot silently route to a different model.
+- No claimed quality improvement: the stronger-model live evaluation is blocked by configuration/network, and the positive-only gold set cannot measure true precision. The earlier phrase "inside the noise" did not establish equivalent ranking quality.
+
+
+## v8.6 — owner decisions after the first real runs (2026-11-08)
+
+| Decision | Why |
+|---|---|
+| **Evidence = beats quoted exactly.** An unquoted citation is dropped (`unquoted_refs_dropped`), not fatal; any altered or invented quote still makes the section uncertain. | The quote check exists to catch fabricated evidence. A citation without a quote is unproven, so it is ignored; it is not fabricated. |
+| **One adequately visible cited beat is enough** (≥ 50 % of it plays inside the clip). | Claude often also cites the shot that runs past the cut-out; that extra citation sank otherwise well-supported endings. All cited beats mostly outside → still uncertain. |
+| **Hook timing** (`review.lands_in_opening`, same wording in the prompt): a beat lands when it starts by 3.0 s and ends by 3.5 s, or ≥ 50 % of the whole beat plays before 3.0 s. | The brief asks for a hook *in the first 3 s*, i.e. something that starts and registers there. v8's "the whole beat must end by 3.0 s" rejected a line from +1.0 to +3.8 s. A beat mostly before the cut-in is still not credited (bug B2). |
+| **The example JSON carries every field the checker requires**; one retry for any reply that fails validation. | Models copy the example shape (B28). A retry uses a different prompt, so a cached malformed reply is never replayed (B33). |
+| Claude `max_tokens` 4,000 (was 2,400). | Haiku's thinking shares the cap; 2 replies were truncated (B34). Cost impact at $0.50/M output is negligible. |

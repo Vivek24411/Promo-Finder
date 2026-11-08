@@ -66,6 +66,16 @@ class Settings:
     w_standalone: float = 0.20
     w_intensity: float = 0.10
     w_funnel: float = 0.10
+    # --- v7: verified eligibility (see promo_finder/eligibility.py) --------------------
+    eligibility: str = "legacy"           # legacy (v4-v6: checks are informational) | verified (v7: one authoritative decision)
+    count_production_cues: bool = True    # v7 False: "cliffhanger", "cut to black", music swells are not story evidence
+    len_tolerance: float = 0.05           # rounding slack on the 20-60 s rule (source times have 0.01-0.1 s precision)
+    ending_window: float = 5.0            # v7: ending evidence must be heard/seen in the final N seconds
+    boundary_search: float = 0.0          # v7 4.0: seconds searched around a cut-in for an opening that shows the action
+    max_boundary_variants: int = 0        # v7: cap on re-cut openings sent to the judge
+    repair_rounds: int = 0                # v7 2: re-cut endings the judge shows are answered inside the clip, then re-judge
+    max_repairs: int = 15                 # cap per repair round
+    judge_retries: int = 2                # v7: extra calls when a judge reply fails validation
     # --- parser checks --------------------------------------------------------------
     min_coverage: float = 0.99
     episode_min_sec: float = 20.0

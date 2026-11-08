@@ -1,9 +1,9 @@
 # Promo Finder configuration. Read by the CLI (run.py), the web app (app.py) and evaluate.py.
 # Every number is explained in DECISIONS.md.
 
-# Which scoring behaviour to use. "v6" = v4 + the changes that held up in the ablation (default).
-# "v4" = the submitted version, still reproducible from cache with --scoring-preset v4.
-scoring_preset = "v6"
+# Which scoring behaviour to use. "v7" = verified eligibility (default): only clips that pass every
+# check, with cited evidence, are recommended. "v6" / "v4" = earlier versions, still reproducible from cache.
+scoring_preset = "v8"
 
 [llm]
 preset = "none"          # none | gemini | groq | openrouter | openai | ollama | anthropic
@@ -116,3 +116,35 @@ standalone_mode = "gate"
 standalone_threshold = 0.5
 stitched_min_standalone = 0.5
 max_stitched_in_top = 3
+
+# v7 = v6 + ONE authoritative eligibility decision (promo_finder/eligibility.py, DECISIONS.md "v7"):
+#   * deterministic checks (length, source bounds, segment order, no mid-line cut) + semantic checks
+#     (hook, unresolved ending, standalone, and the cut for two-moment promos) as pass / fail / uncertain,
+#     each with the beats that support it. Any fail -> rejected, any uncertain -> review, else recommended.
+#   * judge v7: one clip per call, evidence by beat ref, validated by code, bounded retries.
+#   * the needs-context score gate is replaced by the semantic standalone check (the gate used a blended
+#     score that let a 4/10 stranger rating through).
+#   * openings that start after the advertised action are re-cut; endings the clip answers itself are
+#     re-cut earlier and judged again (never reusing the old judgment).
+#   * production cues ("cliffhanger", "cut to black", music swells) and calm tone alone are not evidence.
+[scoring_presets.v7]
+lexicon = "generic_v7"
+show_profile = true
+eligibility = "verified"
+standalone_mode = "additive"     # standalone gates through the semantic check; the score only ranks
+count_production_cues = false
+resolve_on_calm_tone = false
+boundary_search = 4.0
+max_boundary_variants = 20
+repair_rounds = 2
+max_repairs = 15
+judge_retries = 2
+max_stitched_in_top = 3
+
+# v8 routes models internally; legacy tables remain for historical comparisons.
+[scoring_presets.v8]
+eligibility = "verified"
+len_tolerance = 0.0
+hook_lead = 0.0
+count_production_cues = false
+resolve_on_calm_tone = false

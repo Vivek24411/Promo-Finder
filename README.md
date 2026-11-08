@@ -1,183 +1,85 @@
 # Promo Finder
 
-Reads a microdrama's timestamped screenplays and returns **ranked 20–60 s promos**. For each promo you get:
-- the episode and start/end time of every segment;
-- the hook (what grabs a stranger in the first 3 s);
-- the cliffhanger it cuts on;
-- one line on why it works.
+An editorial workspace for finding source-grounded 20–60 second promotional clips in timestamped screenplays. **v8.0** is the current local implementation. Earlier v4–v7 code, cached runs and experiments remain available for historical comparison.
 
-It comes with a web app for editors, a CLI, an evaluation harness and tests.
+Load screenplay → Find promos → Review recommendations. No model selectors or credential fields appear in the editor workflow. Each clip includes exact ordered segments, a screenplay excerpt, opening/ending evidence, ranking rationale, limitations, and separate human approval. This finds cuts; it does not render video or predict marketing performance.
 
-**Live app:** https://promo.expediva.in. It runs in public mode; open the *Sample show* to try it without uploading anything.
+## Run locally
 
-**The scripts are confidential, so none are in this repo.** Point the tool at your own folder. An original 10-episode test show (`tests/fixtures/synthetic_show/`, not Kuku content) is included for trying it out.
-
-## Install
+Python 3.11+:
 
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt            # streamlit (+ anthropic, only for Claude)
-pip install -r requirements-dev.txt        # pytest, for the tests
+cd '/home/vivek/Documents/Rajan Kuku/promo-finder'
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+# Populate server variables from .env.example in your EXISTING .env.
+# Do not overwrite an existing environment file; never commit credentials.
+.venv/bin/streamlit run app.py
 ```
 
-The core pipeline and CLI use only the Python 3.11+ standard library.
+Server configuration:
 
-## Web app
+- `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`
+- `GEMINI_MODEL` (default `gemini-3.5-flash-lite`), `CLAUDE_MODEL` (default `claude-sonnet-5-5`)
+- `GEMINI_INPUT_USD_PER_MILLION`, `GEMINI_OUTPUT_USD_PER_MILLION`, `CLAUDE_INPUT_USD_PER_MILLION`, `CLAUDE_OUTPUT_USD_PER_MILLION`: set current prices for the selected model. Unknown prices block paid calls; they are never reported as free.
+- `MAX_RUN_COST_USD=2.00`, `MAX_RUN_SECONDS=1200`
+- `FINAL_REVIEW_LIMIT=60`, `AUDIT_SAMPLE_SIZE=4`, `GEMINI_RPM=12`, `CLAUDE_RPM=12`
+
+Model names/prices are server settings. Consult [Google pricing](https://ai.google.dev/gemini-api/docs/pricing) and [Claude models and pricing](https://platform.claude.com/docs/en/models/overview). Model access and prices depend on the account; changing the model requires checking its price. The compatible HTTP adapter and Claude Messages adapter remain internal interfaces. Claude calls have **no automatic fallback model**.
 
 ```bash
-streamlit run app.py                        # http://localhost:8501
+.venv/bin/python run.py --show /path/to/show --estimate
+.venv/bin/python run.py --show /path/to/show
+# Explicit offline inspection: always unverified; no paid calls.
+.venv/bin/python run.py --show tests/fixtures/synthetic_show --inspect
+.venv/bin/python -m pytest tests -q
 ```
 
-The app follows the editor's steps: **Load → Check → Run → Review.**
+The v8 CLI uses the configured budget without an interactive confirmation. Missing services produce a partial artifact with reasons; the UI disables Find promos until configuration is present. Historical experiments explicitly select `--scoring-preset v7 --preset gemini` (or v4/v6); legacy experiments do not use v8's budget guard. They are not the normal editor route.
 
-1. **Load.** Upload `.txt`/`.md` files, a folder or a `.zip`; type a folder path; open the sample show; or reopen a previous run from the sidebar.
-2. **Check.** Before anything is spent, the app shows:
-   - how many episodes, beats and minutes it found;
-   - the share of timestamp lines it could read (below 99% it stops, unless you tick "Run anyway");
-   - parser warnings;
-   - the number of **new model calls and tokens** the run will need.
-3. **Run.** Live progress (stage, calls, tokens, time, estimated cost) and a Cancel button. A rules-only preview appears within seconds.
-4. **Review.**
-   - Promo cards with Approve/Reject. Verdicts are saved per run, in `feedback.jsonl`.
-   - A *Needs context* tab, the report, a table, run details, and downloads of every output file.
+## Input and timing
 
-**Sidebar:**
-- **Provider:** Rules only (no key), Gemini, Claude, OpenAI or any OpenAI-compatible base URL, Groq, OpenRouter, Ollama.
-- **Model id, API key, parallel calls.**
-- **Scoring preset:** `v6` (the default: v4 plus the changes that held up in the ablation), `v4` (as submitted, still reproducible from cache) or `v5` (every change tried).
-- **Episode range**, **number of promos**, **previous runs**, and **Clear cache**. The read-only v4 snapshot survives Clear cache.
+One UTF-8 `.txt` or `.md` file per episode; uploads also accept ZIP. Include `EPISODE NUMBER: 1` or an episode number in the filename. Beat example:
 
-**Keys and privacy:**
-- A key typed into the app stays in that browser session's memory. It's never written to disk, logs, cache keys or `run_meta.json`.
-- Uploaded scripts are written to a temporary folder that's deleted right after each step.
-- Streamlit's usage statistics (telemetry) are switched off in `.streamlit/config.toml`.
+```text
+EPISODE NUMBER: 1
+**ACTION:**
+Start: (00:00.00) | End: (00:02.50)
+The clock begins counting backwards.
 
-## Command line
-
-```bash
-python run.py --show /path/to/show                                  # rules only, no key, ~1 s
-python run.py --show /path/to/show --preset gemini                  # key from .env (GEMINI_API_KEY=...)
-python run.py --show /path/to/show --preset gemini --scoring-preset v4   # the submitted version
-python run.py --show /path/to/show --preset gemini --estimate       # how many NEW calls? spends nothing
-python run.py --show /path/to/show --preset gemini --episodes 26-50 --workers 4
-python run.py --show /path/to/show --preset anthropic --model claude-haiku-5-5
-python run.py --show /path/to/show --preset openai --base-url https://your-gateway/v1 --model your-model --api-key-env YOUR_KEY_VAR
+**MARA:**
+Start: (00:02.50) | End: (00:05.00)
+We have one minute to stop it.
 ```
 
-If a run needs uncached model calls, the CLI shows the estimate and asks before spending (`--yes` skips the question). `--force` runs even when parse coverage is below 99%.
+Dialogue, actions, camera and sound cues are preserved with stable beat IDs. Times mean decimal seconds, not frames. Export precision is retained (up to nine decimal places); durations use decimal subtraction and must actually lie within 20–60 seconds. Source-derived boundaries must not bisect dialogue. Missing/invalid ends are flagged and cannot support automatic recommendations. Long action descriptions do not supply word- or action-level timing: the meaningful hook remains uncertain unless its complete supporting beat finishes within three seconds.
 
-**Presets** (base URL and key variable built in; rate limits and prices in `config.toml [providers.*]`):
+## Actual pipeline
 
-| `--preset` | Default model | Key variable |
-|---|---|---|
-| `none` | rules only | none |
-| `gemini` | gemini-3.5-flash-lite | `GEMINI_API_KEY` |
-| `anthropic` | claude-opus-5-5 | `ANTHROPIC_API_KEY` |
-| `openai` | gpt-4o-mini (or any `--base-url`) | `OPENAI_API_KEY` |
-| `groq` | llama-3.3-70b-versatile | `GROQ_API_KEY` |
-| `openrouter` | llama-3.3-70b-instruct:free | `OPENROUTER_API_KEY` |
-| `ollama` | qwen2.5:7b (local) | none |
+1. Parse all files and report failures. A parse coverage below 99% stops the run.
+2. Gemini reads every episode in whole-beat chunks with overlap and preceding source context. Compact annotations cite original beat IDs and exact quotes. No show profile, title, genre vocabulary or keyword score gates eligibility.
+3. Code enumerates legal continuous windows. Memory/search limits: 24 retained variants per episode, at most 80 sampled legal ends per start; optional model-suggested two-segment, chronological, same-episode cuts (40 maximum). Deduplication is delayed until after review. These bounds can miss good clips and are recorded.
+4. Semantic scores prioritize final review, including episode representatives. Claude reviews up to 60 primary candidates, six observable uncertainty cases, and four deterministic low-ranked audit samples. Selection uses evidence/context/timing/ending/transition signals, not confidence. Unselected clips remain unverified and are exported in `evaluated.json`.
+5. Claude sees one clip only, without the show summary, generation rationale, or other candidates. Code checks source references, exact quotes, strict boundaries, assembled timing, and contradictions. Stitched clips receive a separate Gemini source-context faithfulness check. Missing/malformed/conflicting evidence means review, not a pass.
+6. Up to six failed endings can get one source-supported boundary repair each; each repaired clip is judged afresh. No repair inherits a pass.
+7. Only passing clips above the quality floor enter ranking. Weights: opening 25%, ending 25%, standalone clarity 15%, stakes 15%, setup economy 10%, coherence 10%; a small cut penalty favors continuous clips. No early-episode bonus. Near-duplicates and repeated moments are removed; maximum two per episode and three stitched promos. One optional Claude comparison of up to five close passing clips replaces an all-pairs tournament. Return at most 25, never fill a quota.
 
-**Outputs** go to `outputs/<show>/<model>[__preset]/`:
-- `promos.json` and `promos.csv` (the main list plus the needs-context list);
-- `report.html` and `report.md`;
-- `run_meta.json`: model, workers, settings, prompt hashes, stage timings, token use, parse coverage, held-out hash;
-- `llm_calls.jsonl`: every raw model reply;
-- `show_profile.json` and `parse_report.json`.
+Coverage distinguishes source beats included in chunks from successfully processed beats. Neither proves exhaustive discovery or correct narrative judgment.
 
-## Deploy on a shared server (Docker + nginx)
+## Cost, persistence and privacy
 
-The image runs the app in **public mode** (`PROMO_FINDER_PUBLIC=1`), which hides everything that's only safe on your own machine:
-- the "folder on this computer" input, so visitors can't read the server's files;
-- *Previous runs*, so visitors never see each other's results;
-- *Clear cache*;
-- the custom **Base URL** field. With a key configured on the server, a custom URL would send that key to whoever runs the URL, and it would let visitors make the server call internal addresses.
+Before each provider attempt, SQLite reserves a conservative allowance using UTF-8 input bytes plus framing allowance and the maximum output tokens. Provider-reported usage settles reservations; errors or missing usage retain the allowance. Two transport retries and one invalid-JSON repair are bounded, with rate limiting and backoff. Calls are serial per route. Runtime prevents new calls after the limit; an in-flight request/rate-limit wait can extend wall time.
 
-```bash
-# on the server, in a folder holding a clean copy of this repo plus a .env with GEMINI_API_KEY=...
-sudo docker build -t promo-finder .
-sudo docker run -d --name promo-finder --restart unless-stopped --memory 1g --cpus 1 \
-  --env-file .env -p 127.0.0.1:8511:8501 \
-  -v promo-finder-cache:/app/.cache -v promo-finder-outputs:/app/outputs promo-finder
-sudo cp deploy/promo.expediva.in.nginx /etc/nginx/sites-available/promo.expediva.in
-sudo ln -s /etc/nginx/sites-available/promo.expediva.in /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d promo.expediva.in        # HTTPS, once DNS points at the server
-```
+Disk locks coalesce identical calls across reruns/processes. Cache identity includes content, boundaries, prompt, model, endpoint, schema and generation parameters. Completed calls are reused; ambiguous interrupted calls leave a `.pending` record and are not automatically repeated. Inspect the provider record before an operator clears such a marker. Run directories use content/code/configuration fingerprints. A SQLite ledger survives resume; unknown attempts never become zero-cost attempts. Reports distinguish usage-based cost calculations from actual billing (unavailable).
 
-If port 80 is closed to the internet (true on the E-Cell server: only 443 is open), certbot can't verify over HTTP. Use the DNS check instead: run `sudo certbot run -a manual -i nginx --preferred-challenges dns -d promo.expediva.in --redirect`, add the TXT record it shows (`_acme-challenge.promo`), wait until `dig` shows it, then press Enter. That certificate doesn't renew by itself: repeat the steps before it expires (90 days).
+Outputs: `outputs/v8/<run-id>/` contains `promos.json/csv`, `report.html/md`, `run_meta.json`, `parse_report.json`, `discovery.json`, `evaluated.json`, `source_context.json`, a byte-for-byte `original_input/` snapshot, `progress.json`, `budget.sqlite`, and raw `llm_calls.jsonl` when calls occur. All evaluated candidates are preserved even when the UI shows a smaller selection. `feedback.jsonl` stores human decisions by exact clip identity, independently of model output. Local exports/caches contain confidential content and remain gitignored.
 
-- The container listens on localhost only; nginx proxies to it, including Streamlit's WebSocket.
-- The memory and CPU caps protect the other sites on the server.
-- To update: copy the new code, rebuild, then `sudo docker rm -f promo-finder` and run the same `docker run` again. The cache and outputs volumes are kept.
-- Anyone with the link can run the model on your key, so watch your quota.
+`PROMO_FINDER_PUBLIC=1` (the public demo) allows uploads of files, a folder or a `.zip` plus the sample show, hides server folders and previous runs, and isolates each session's results. **Models and API keys** (in the app) swaps the provider, model and key of either stage per session: keys live only in that browser session; on the public demo a swapped model needs the visitor's own key, and a custom endpoint must be public HTTPS (no server key is ever sent to it). v8.6 is deployed at https://promo.expediva.in (server settings in the server's `.env`, public mode on). The Docker/nginx configuration is unchanged.
 
-## Run on a new show (the interview flow)
+## Verification and submission
 
-1. `python run.py --show NEW_SHOW` checks the format in about a second, with no key. Look at the coverage line and the warnings.
-2. `python run.py --show NEW_SHOW --preset gemini --estimate` shows the cost (v6 scoring is the default).
-3. Run it, or use the web app. On the Gemini free tier (about 12 requests/minute) 50 episodes take 6 minutes or more. A paid key with `--workers 8` takes about a minute.
-4. To rehearse, use the sample show in the app, or `python run.py --show REAL_PACK --episodes 26-50` as a "new" show.
+See the [two-page solution doc](docs/Promo_Finder_Solution_Doc.pdf), the [verification report](docs/verification/v8.md) and [design decisions](DECISIONS.md).
 
-## Quality checks
+**Completed real run (v8.6, 8 Nov 2026):** all 50 episodes (3,727 beats) parsed and model-processed; Gemini 3.5 Flash-Lite discovery on every episode (free tier), Claude Haiku 5.5 final review of 72 clips; about 11 minutes and $0.10 of provider usage per full run. **45 clips passed every check with exact quoted evidence; 25 are returned (the cap), from 25 different episodes**; 19 went to review and 8 were rejected, each with reasons. Against the 20 hand-picked gold moments the top 25 cover 9/20 (v6: 12/20; 95% intervals overlap), so no ranking improvement is claimed. Unedited artifacts (confidential, gitignored): `outputs/v8/fd1e6aebd5ec7e477650e108/`. The first real run recommended only 3 clips because of prompt/checker contract bugs, not model errors; see BUGS_FOUND B28–B35.
 
-```bash
-python evaluate.py outputs/<show>/<run> ...          # dev set: hits/total, rate, 95% Wilson interval
-python evaluate.py --heldout outputs/<show>/<run>    # held-out set, kept separate and logged
-python evaluate.py --ablation --show <folder>        # each change on its own; prints new-call counts first
-python evaluate.py --ablation --show <folder> --allow-api   # actually spend the calls
-python scripts/validate_moments.py eval/heldout_moments.json --show <folder>
-```
-
-**Evaluation sets.** The dev set is `eval/gold_moments.json` (20 moments, gitignored; the schema is in `eval/gold_moments.example.json`). For a held-out set:
-1. Copy `eval/heldout_moments.template.json` to `eval/heldout_moments.json` and write the moments yourself, *before* looking at the tool's picks for those episodes.
-2. Every held-out evaluation appends a line to `eval/heldout_ledger.log`, and you get a loud warning if the file ever changes.
-
-**Human check of the AI judge** (run it on the synthetic show only):
-1. `python scripts/rating_sheet.py <run>` builds a blind, printable sheet.
-2. Raters fill in `ratings_template.csv`.
-3. `python scripts/judge_agreement.py <run> ratings_*.csv` reports the Spearman correlation, the mean absolute difference, the share of ratings within ±2 points, and any bias.
-
-**Provider smoke test** (one tiny call each, with your keys): `python scripts/smoke_test_provider.py [--structured]`.
-
-**Tests:** `python -m pytest tests` runs about 60 tests with a mock LLM (no network, no cost), on the parser, the model layer, the pipeline end to end, and the app. A real-data v4 regression test runs only if the private input pack is present.
-
-**Speed:** `python scripts/bench_mock.py --latency 1.5` measures 50 episodes against the mock server: 84 s with 1 worker, 23 s with 4, 14 s with 8.
-
-## How it works
-
-```
-scripts → PARSE (code) → RULES (code) → SHOW PROFILE (LLM, v5) → MOMENT MINER (LLM, 1 call/episode, beat IDs only)
-        → CANDIDATES (code: shot-boundary cuts, 20–60 s, two-moment trailers) → COLD-VIEWER JUDGE (LLM, sees only the clip)
-        → RANK + CHECKS (code) → LISTWISE RERANK of the top 10 (LLM, v5) → outputs + editor review
-```
-
-**What the AI does, and what code does:**
-- **The model never writes a timestamp.** It answers with beat IDs, code validates every ID, and code owns all times, cut points and length rules.
-- **Rules make the tool free to run and explainable.** The AI handles the judgement calls (is this a hook? would a stranger follow it?), and an editor makes the final pick.
-
-See `DECISIONS.md` for every number and design choice, and `BUGS_FOUND.md` for every bug found so far.
-
-## Results on the input pack (dev set, 20 moments; one moment = 5 points)
-
-| Run | recall@25 | precision@10 |
-|---|---|---|
-| Rules only | 6/20 = 0.30 [0.15–0.52] | 3/10 = 0.30 |
-| Rules + AI miner, no judge | 8/20 = 0.40 [0.22–0.61] | 4/10 = 0.40 |
-| Full v4 | 13/20 = 0.65 [0.43–0.82] | 6/10 = 0.60 |
-| v5 (every change tried) | 11/20 = 0.55 [0.34–0.74] | 5/10 = 0.50 |
-| **v6** (v4 + show profile + needs-context + stitched safeguards) | 12/20 = 0.60 [0.39–0.78] | 7/10 = 0.70 |
-
-**Reading the table:**
-- Going from rules alone to rules + AI is a real gain, and most of it comes from the cold-viewer judge.
-- Smaller differences fall inside the 95% intervals.
-- Several v5 ideas made results worse, and v6 keeps only the ones that didn't. See the ablation section of `DECISIONS.md`.
-- A fresh v4 run matched 6 of the top 10. Every call is cached, so a given run is exactly reproducible.
-
-## Known limits
-
-- **It reads the script, not the video**, so it can't see acting, music or pacing.
-- **The rule lists are English.**
-- **The dev set is small** and was drafted by the AI, then reviewed by the author.
-- **The early-episode bonus is an untested assumption.**
-- **The judge is generous with cliffhanger scores.** v5 adds yes/no checks and a head-to-head rerank to address that.
+The existing gold set contains selected positive moments, not exhaustive acceptance/rejection labels. `evaluate.py` now calls the top-list metric **gold overlap**, not precision. Human acceptance, false acceptance, ranking improvement and held-out-show quality have not been established. Synthetic regressions verify constraints; they do not establish model quality. The UI was exercised through Streamlit AppTest; real browser, narrow-screen, contrast and keyboard checks remain unverified because this sandbox cannot launch its listening socket.

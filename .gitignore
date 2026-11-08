@@ -30,3 +30,16 @@ __pycache__/
 .venv/
 .uploads/
 promo_finder/*.private.toml
+
+# Published docs: the final solution doc and the verification record only (aggregate findings, no script text).
+# Everything else in docs/ (older drafts, generated versions, interview notes) stays private.
+!docs/
+docs/*
+!docs/Promo_Finder_Solution_Doc.pdf
+!docs/verification/
+docs/verification/*
+!docs/verification/v8.md
+!docs/verification/test-results.txt
+
+# Builds the earlier draft doc from a private source file (docs/solution_v8.json); not part of the published repo.
+scripts/build_solution_pdf.py

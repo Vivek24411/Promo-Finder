@@ -50,6 +50,7 @@ def progress_bar():
 def main():
     C.load_dotenv()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--inspect", action="store_true", help="Offline source/boundary inspection; no model recommendations")
     ap.add_argument("--show", required=True, help="folder with one screenplay per episode (.txt or .md)")
     ap.add_argument("--name", help="show name (defaults to the folder name)")
     ap.add_argument("--config", help="config file (default: config.toml)")
@@ -75,6 +76,21 @@ def main():
         eps = parse_episode_range(a.episodes)
     except ValueError as e:
         raise SystemExit(str(e))
+    if cfg.scoring_preset == "v8":
+        from promo_finder import v8
+        import json
+        if a.preset or a.model or a.base_url or a.episodes:
+            raise SystemExit("v8 processes the complete input and configures Gemini/Claude on the server. Use an explicit legacy scoring preset for historical experiments.")
+        if a.estimate:
+            print(json.dumps(v8.estimate(show_dir), indent=2)); return
+        try:
+            result, out = v8.run(show_dir, out=a.out, inspection=a.inspect, show_name=name,
+                                progress=lambda stage,done,total: print(f"{stage}: {done}/{total}"))
+        except (ValueError, LLMError, OSError) as exc:
+            raise SystemExit(str(exc)) from None
+        print(json.dumps({"status":result["meta"]["status"],"recommended":len(result["promos"]),
+                          "budget":result["meta"]["budget"],"outputs":str(out)},indent=2))
+        return
     preset = a.preset or cfg.llm_preset
     llm = C.make_llm(cfg, preset, a.model, a.base_url, api_key_env=a.api_key_env, workers=a.workers)
     if llm.enabled and not llm.has_key():
@@ -139,6 +155,12 @@ def main():
         print(f"  {p.id}  {p.final:.2f}  {p.duration:4.1f}s  {segs}  | {p.hook_text[:60]}")
     if result["needs_context"]:
         print(f"  (+{len(result['needs_context'])} promos in the 'needs context' list)")
+    if el := m.get("eligibility"):
+        s = el["status"]
+        print(f"  {el['evaluated']} clips evaluated: {s['recommended']} eligible ({m['returned']} returned, max "
+              f"{el['top_k_max']}), {s['review']} need review, {s['rejected']} rejected · judge: "
+              f"{m['judge'].get('api_calls', 0)} new calls, {m['judge'].get('replies_valid', 0)} valid replies, "
+              f"{m['judge'].get('validation_retries', 0)} validation retries, {m['judge'].get('clips_unjudged', 0)} unjudged")
 
 
 def _slug(s: str) -> str:

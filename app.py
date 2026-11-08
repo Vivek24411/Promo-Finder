@@ -1,537 +1,273 @@
-"""Promo Finder - the editor's web app.
-
-    streamlit run app.py
-
-Load -> Check -> Run -> Review. Calls the same pipeline.run() as the CLI (no duplicated logic).
-Uploaded scripts only touch disk inside a temporary folder that is deleted right after each step;
-typed API keys live only in this browser session's memory.
-"""
+"""Promo Finder v8: load a screenplay, find promos, review editorial evidence."""
 from __future__ import annotations
-
-import base64
-import html
+import hashlib
 import io
 import json
 import os
-import shutil
 import tempfile
 import time
 import zipfile
 from contextlib import contextmanager
 from pathlib import Path
-
 import streamlit as st
+from promo_finder import config as C, v8
+from promo_finder.parse import parse_show, fmt_ts
+from promo_finder.llm import PRESETS
+from promo_finder.runtime import (VERSION, KNOWN_PRICES, PROVIDERS, ROLE_LABELS, configuration_errors,
+                                   role_settings, routes)
 
-from promo_finder import config as C
-from promo_finder.llm import PRESETS, Cancelled, LLMError
-from promo_finder.parse import fmt, parse_episode_range, parse_show
-from promo_finder.pipeline import ParseCoverageError, clean_show_name, estimate, file_sha256, run
-from promo_finder.report import promo_dict, write_all
-
-HERE = Path(__file__).parent
-SAMPLE = HERE / "tests" / "fixtures" / "synthetic_show"
+HERE=Path(__file__).parent
+SAMPLE=HERE/'tests'/'fixtures'/'synthetic_show'
 C.load_dotenv()
-BASE = C.load()
-RUNS_DIR = BASE.outputs_dir / "ui_runs"
-# Public mode (set PROMO_FINDER_PUBLIC=1 on a shared server): visitors must not reach the server's files,
-# other visitors' runs, the shared cache, or send the server's key to an arbitrary URL.
-PUBLIC = os.environ.get("PROMO_FINDER_PUBLIC", "").strip().lower() in ("1", "true", "yes")
-
-PROVIDER_LABELS = {"none": "Rules only (no key)", "gemini": "Google Gemini", "anthropic": "Anthropic Claude",
-                   "openai": "OpenAI / custom endpoint", "groq": "Groq", "openrouter": "OpenRouter", "ollama": "Ollama (local)"}
-PRESET_LABELS = {"v4": "v4: submitted", "v6": "v6: v4 + safe changes", "v5": "v5: all changes"}
-STAGE_LABELS = {"parse": "Reading scripts", "profile": "Profiling the show", "miner": "Finding hook and cliffhanger beats",
-                "judge": "Cold-viewer review", "rerank": "Head-to-head ranking", "done": "Finishing"}
-
-st.set_page_config(page_title="Promo Finder", page_icon=":material/movie:", layout="wide",
-                   initial_sidebar_state="expanded")
-
-st.html("""<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap');
-:root{--ink:#1C1A17;--mute:#6F685E;--line:#DED8CC;--paper:#F6F4EF;--card:#FFFFFF;--accent:#B5502A;--ok:#2F6B4F;--warn:#9A6A12;--bad:#A23B2A}
-[data-testid="stDecoration"]{display:none}
-[data-testid="stHeader"]{background:transparent}
-.block-container{max-width:1140px;padding-top:2.2rem}
-h1,h2,h3,.pf-serif{font-family:'Newsreader',Georgia,serif!important;font-weight:500!important;letter-spacing:-.01em}
-.pf-top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:6px}
-.pf-word{font-family:'Newsreader',Georgia,serif;font-size:34px;line-height:1;color:var(--ink)}
-.pf-word em{font-style:italic;color:var(--accent)}
-.pf-sub{color:var(--mute);font-size:14px}
-.pf-chips{display:flex;gap:8px;flex-wrap:nowrap;white-space:nowrap}
-.pf-chip{font:500 12px 'JetBrains Mono',monospace;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--card)}
-.pf-steps{display:flex;gap:0;margin:14px 0 22px;font-size:13px}
-.pf-step{flex:1;padding:8px 0;border-top:2px solid var(--line);color:var(--mute)}
-.pf-step b{font-family:'JetBrains Mono',monospace;font-weight:500;margin-right:6px}
-.pf-step.on{border-top-color:var(--ink);color:var(--ink)}
-.pf-step.done{border-top-color:var(--accent);color:var(--ink)}
-.pf-label{font:600 11px Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:4px 0 8px}
-.pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0 12px}
-.pf-stat{background:var(--card);padding:12px 14px}
-.pf-stat .v{font-family:'Newsreader',Georgia,serif;font-size:26px;line-height:1.1;color:var(--ink)}
-.pf-stat .k{font-size:12px;color:var(--mute);margin-top:2px}
-.pf-note{border-left:3px solid var(--warn);background:#FBF6EA;padding:9px 12px;border-radius:0 8px 8px 0;font-size:13.5px;margin:6px 0}
-.pf-note.bad{border-left-color:var(--bad);background:#FBEDEA}
-.pf-note.ok{border-left-color:var(--ok);background:#EEF5F0}
-.pf-head{display:flex;gap:18px;align-items:flex-start}
-.pf-rank{font-family:'Newsreader',Georgia,serif;font-size:40px;line-height:.9;color:var(--accent);min-width:54px}
-.pf-tc{display:inline-block;font:500 13px 'JetBrains Mono',monospace;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:3px 8px;margin:0 6px 6px 0}
-.pf-meta{font-size:12.5px;color:var(--mute)}
-.pf-dl{display:grid;grid-template-columns:96px 1fr;gap:6px 14px;margin:12px 0 10px;font-size:14.5px}
-.pf-dl dt{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
-.pf-dl dd{margin:0;color:var(--ink)}
-.pf-meters{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin:4px 0 8px}
-.pf-meter{display:flex;align-items:center;gap:6px}
-.pf-meter i{display:inline-block;width:70px;height:4px;background:var(--line);border-radius:4px;position:relative;overflow:hidden}
-.pf-meter i s{position:absolute;inset:0 auto 0 0;background:var(--ink);border-radius:4px;text-decoration:none}
-.pf-badges{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
-.pf-b{font-size:11.5px;border-radius:6px;padding:2px 7px;border:1px solid var(--line);color:var(--mute);background:var(--card)}
-.pf-b.fail{color:var(--bad);border-color:#E7C4BC;background:#FBEDEA}
-.pf-flags{font-size:12.5px;color:var(--warn);margin:4px 0 0;padding-left:16px}
-[class*="st-key-card_"]{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px 10px}
-[class*="st-key-card_"][class*="_approve"]{border-left:3px solid var(--ok)}
-[class*="st-key-card_"][class*="_reject"]{opacity:.62}
-[class*="st-key-prev_"]{background:transparent;border:1px dashed var(--line);border-radius:10px;padding:10px 14px}
-.pf-run{font-size:13px;color:var(--mute)}
-.pf-run b{color:var(--ink);font-weight:600}
-.stTabs [data-baseweb="tab"]{font-size:14px}
-[data-testid="stSidebar"] h3{font-size:19px!important;margin-top:.4rem}
-</style>""")
-
-
-# ============================================================================= helpers
-def secret(name: str) -> str:
-    try:
-        if name and name in st.secrets:
-            return str(st.secrets[name])
-    except Exception:
-        pass
-    return os.environ.get(name, "") if name else ""
-
-
-def esc(x) -> str:
-    return html.escape(str(x if x is not None else ""))
+PUBLIC=os.getenv('PROMO_FINDER_PUBLIC','').lower() in ('1','true','yes')
+RUNS=HERE/'outputs'/'v8'
+st.set_page_config(page_title='Promo Finder',layout='wide',initial_sidebar_state='collapsed')
+st.html('''<style>
+.block-container{max-width:1120px;padding-top:2rem}
+h1{font-size:2rem!important;letter-spacing:-.035em}h2{font-size:1.3rem!important}
+.pf-intro{color:#514c46;border-bottom:1px solid #d8d4cc;padding-bottom:18px;margin-bottom:22px}
+.pf-steps{color:#514c46;font-size:14px;line-height:1.8}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #795538!important;outline-offset:3px}
+pre{white-space:pre-wrap!important;overflow-wrap:anywhere}
+@media(max-width:600px){.block-container{padding:1rem}.pf-steps{font-size:13px}h1{font-size:1.7rem!important}}
+</style>''')
 
 
 @contextmanager
-def materialized(source: dict):
-    """Yield a folder holding the scripts. Uploads are written to a temp folder that is deleted on exit."""
-    if source["kind"] in ("sample", "local"):
-        yield Path(source["path"])
-        return
-    tmp = Path(tempfile.mkdtemp(prefix="pf_upload_"))
-    try:
-        for name, data in source["files"]:
-            if name.lower().endswith(".zip"):
+def materialized(source):
+    if source['kind'] in ('sample','local'):
+        yield Path(source['path']); return
+    with tempfile.TemporaryDirectory(prefix='promo_') as folder:
+        root=Path(folder)
+        total=0
+        for name,data in source['files']:
+            if name.lower().endswith('.zip'):
                 with zipfile.ZipFile(io.BytesIO(data)) as z:
-                    for info in z.infolist():
-                        base = Path(info.filename).name          # basename only: no path traversal
-                        if info.is_dir() or base.startswith(("._", ".")) or Path(base).suffix.lower() not in (".txt", ".md"):
-                            continue
-                        target = tmp / base
-                        if target.exists():
-                            target = tmp / f"{len(list(tmp.iterdir())):03d}_{base}"
-                        target.write_bytes(z.read(info))
+                    members=[f for f in z.infolist() if not f.is_dir() and Path(f.filename).suffix.lower() in ('.txt','.md') and not Path(f.filename).name.startswith('.')]
+                    total+=sum(f.file_size for f in members)
+                    if total>50_000_000 or len(members)>2000: raise ValueError('Archive exceeds 50 MB or 2,000 script files.')
+                    for f in members:
+                        target=root/Path(f.filename).name
+                        if target.exists(): raise ValueError('Duplicate script filenames in upload. Give each episode a unique filename.')
+                        target.write_bytes(z.read(f))
             else:
-                (tmp / Path(name).name).write_bytes(data)
-        yield tmp
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+                total+=len(data)
+                if total>50_000_000: raise ValueError('Upload exceeds 50 MB of screenplay text.')
+                target=root/Path(name).name
+                if target.exists(): raise ValueError('Duplicate script filenames.')
+                target.write_bytes(data)
+        yield root
 
 
-def friendly(e: BaseException, provider: str) -> tuple[str, str]:
-    p = PROVIDER_LABELS.get(provider, provider)
-    if isinstance(e, LLMError):
-        return {
-            "auth": (f"{p} rejected the API key.", "Check the key in the sidebar. Keys are kept in memory only."),
-            "rate_limit": (f"{p} kept rate-limiting the run.", "Every finished call is cached. Wait a minute and run again; it continues where it stopped."),
-            "unavailable": (f"{p} is unreachable or overloaded.", "Every finished call is cached. Try again shortly, or choose 'Rules only'."),
-            "bad_request": (f"{p} rejected the request.", "Check the model id and base URL in the sidebar."),
-            "refusal": ("The model declined this request.", "Try another model, or run rules only."),
-            "parse": ("The model's replies could not be read as JSON.", "Try a stronger model. The smoke test script checks a provider in one call."),
-            "config": ("Configuration problem.", str(e)),
-        }.get(e.kind, ("The model call failed.", str(e)[:200]))
-    if isinstance(e, Cancelled):
-        return ("Run cancelled.", "Finished calls are cached, so running again continues where it stopped.")
-    if isinstance(e, SystemExit):
-        return ("Nothing to run.", str(e))
-    return ("Something went wrong.", f"{type(e).__name__}: {str(e)[:200]}")
-
-
-def list_runs() -> list[Path]:
-    dirs = [p.parent for p in BASE.outputs_dir.rglob("promos.json") if "ablation" not in p.parts]
-    return sorted(dirs, key=lambda d: (d / "promos.json").stat().st_mtime, reverse=True)[:40]
-
-
-def run_label(d: Path) -> str:
-    try:
-        m = json.loads((d / "run_meta.json").read_text())
-        when = time.strftime("%d %b %H:%M", time.localtime((d / "promos.json").stat().st_mtime))
-        return f"{m.get('show', d.name)[:28]} · {m.get('model', '?').split(':')[-1]} · {m.get('scoring_preset', 'v4')} · {when}"
-    except Exception:
-        return d.name
-
-
-def load_run(d: Path) -> dict:
-    data = json.loads((d / "promos.json").read_text())
-    fb = d / "feedback.jsonl"
-    verdicts = {}
-    if fb.exists():
-        for line in fb.read_text().splitlines():
+def load_run(path):
+    data=json.loads((path/'promos.json').read_text())
+    decisions={}
+    if (path/'feedback.jsonl').exists():
+        for line in (path/'feedback.jsonl').read_text().splitlines():
             try:
-                r = json.loads(line)
-                verdicts[r["id"]] = r["verdict"]
-            except Exception:
-                pass
-    return {"meta": data["meta"], "rows": data["promos"], "ctx": data.get("needs_context", []), "out": str(d),
-            "verdicts": verdicts}
+                item=json.loads(line);decisions[item.get('clip_key',item['id'])]=item['verdict']
+            except (ValueError,KeyError): pass
+    return {'data':data,'out':str(path),'decisions':decisions}
 
 
-def set_verdict(R: dict, row: dict, verdict: str):
-    R["verdicts"][row["id"]] = verdict
-    with open(Path(R["out"]) / "feedback.jsonl", "a") as f:
-        f.write(json.dumps({"id": row["id"], "verdict": verdict, "rank": row["rank"], "list": row.get("list", "main"),
-                            "segments": [{k: s[k] for k in ("episode", "start", "end")} for s in row["segments"]],
-                            "score": row["score"], "components": row["component_scores"], "ts": time.time()}) + "\n")
+def run_label(path):
+    try:
+        meta=json.loads(path.read_text())['meta']
+        when=time.strftime('%d %b %H:%M',time.localtime(path.stat().st_mtime))
+        return f"{meta.get('show','Screenplay')} · {when} · {meta.get('status','saved run').replace('_',' ')}"
+    except (ValueError,KeyError,OSError):
+        return path.parent.name
 
 
-def stats_html(items: list[tuple[str, str]]) -> str:
-    return '<div class="pf-stats">' + "".join(f'<div class="pf-stat"><div class="v">{esc(v)}</div><div class="k">{esc(k)}</div></div>'
-                                             for k, v in items) + "</div>"
+def set_verdict(R,row,verdict):
+    key=row.get('clip_key',row['id'])
+    with (Path(R['out'])/'feedback.jsonl').open('a') as f:
+        f.write(json.dumps({'id':row['id'],'clip_key':key,'verdict':verdict,'ts':time.time()})+'\n')
+    R['decisions'][key]=verdict
 
 
-def meter(label: str, v: float | None) -> str:
-    if v is None:
-        return ""
-    return f'<span class="pf-meter">{esc(label)} <i><s style="width:{max(0, min(10, v)) * 10:.0f}%"></s></i> {v:.0f}</span>'
+def detail(R,row):
+    st.subheader('Clip '+row['id'])
+    key=row.get('clip_key',row['id'])
+    human=R['decisions'].get(key,'not reviewed')
+    st.caption(f"System: {row['status']} · Editor: {human} · {row['duration_sec']:g} seconds")
+    for i,s in enumerate(row['segments'],1):
+        st.markdown(f"**{i}. Episode {s['episode']} · {s['start']} → {s['end']}**")
+    for label,field in [('Opening hook','hook'),('Ending','final_moment'),('Unresolved question','cliffhanger'),
+                        ('Why consider it','why_it_works'),('Why it ranks here','rank_explanation'),('Concern','limitations')]:
+        if row.get(field): st.markdown(f"**{label}**  \n{row[field]}")
+    for reason in row.get('failure_reasons',[]): st.error(reason)
+    for reason in row.get('review_reasons',[]): st.warning(reason)
+    with st.expander('Opening, ending and validation evidence'):
+        for name,c in row['checks'].items():
+            st.markdown(f"**{name.replace('_',' ').capitalize()} — {c['status']}**  \n{c['reason']}")
+            for ev in c.get('evidence',[]):
+                st.caption(f"{ev['beat']} · {ev['time']} · clip {ev['clip_time']}")
+                st.text(ev['text'])
+    with st.expander('Read screenplay excerpt',expanded=True):
+        st.caption('Source text in playback order. Screenplay timing does not establish acting or actual delivery.')
+        for s in row['segments']:
+            st.code('\n'.join(s['script']),language=None,wrap_lines=True)
+    with st.expander('Source context'):
+        context=Path(R['out'])/'source_context.json'
+        if context.exists():
+            source=json.loads(context.read_text())
+            for ep in sorted({s['episode'] for s in row['segments']}):
+                st.code('\n'.join(source.get(str(ep),[])),language=None,wrap_lines=True)
+        else: st.caption('Source context is unavailable for this older run.')
+    a,b=st.columns(2)
+    a.button('Approve',key='approve_'+row['id'],on_click=set_verdict,args=(R,row,'approved'),width='stretch')
+    b.button('Reject',key='reject_'+row['id'],on_click=set_verdict,args=(R,row,'rejected'),width='stretch')
+    st.caption('Editor decisions are saved separately. Approval does not change the system’s original judgment.')
 
 
-CHECK_LABELS = {"length_20_60s": "20–60 s", "clean_cuts_no_mid_line": "clean cuts", "hook_in_first_3s": "hook in 3 s",
-                "ends_unresolved": "ends unresolved", "has_dialogue": "has dialogue", "cold_viewer_understands": "stranger follows"}
-
-
-def card(R: dict, r: dict, compact: bool = False):
-    verdict = R["verdicts"].get(r["id"], "none") if R else "none"
-    key = f"{'prev' if compact else 'card'}_{Path(R['out']).name if R else 'preview'}_{r['id']}_{verdict}"
-    with st.container(key=key):
-        segs = "".join(f'<span class="pf-tc">EP {s["episode"]:02d} · {esc(s["start"])} → {esc(s["end"])}</span>' for s in r["segments"])
-        kind = "two-moment trailer" if r["kind"] == "stitched" else "continuous"
-        mark = {"approve": " · approved", "reject": " · rejected"}.get(verdict, "")
-        head = (f'<div class="pf-head"><div class="pf-rank">{r["rank"]:02d}</div><div><div>{segs}</div>'
-                f'<div class="pf-meta">{r["duration_sec"]} s · {kind} · score {r["score"]:.2f}{mark}</div></div></div>')
-        if compact:
-            st.html(head + f'<dl class="pf-dl"><dt>Hook</dt><dd>{esc(r["hook"])}</dd></dl>')
-            return
-        cv = r.get("cold_viewer") or {}
-        meters = "".join([meter("Hook", cv.get("hook")), meter("Cliffhanger", cv.get("cliffhanger")),
-                          meter("Makes sense alone", cv.get("standalone"))])
-        badges = "".join(f'<span class="pf-b{"" if ok else " fail"}">{"✓" if ok else "✗"} {esc(CHECK_LABELS.get(k, k))}</span>'
-                         for k, ok in r["checks"].items())
-        flags = "".join(f"<li>{esc(f)}</li>" for f in r["needs_human_review"])
-        st.html(head + f'<dl class="pf-dl"><dt>Hook</dt><dd>{esc(r["hook"])}</dd><dt>Cliffhanger</dt>'
-                f'<dd>{esc(r["cliffhanger"])}</dd><dt>Why</dt><dd>{esc(r["why_it_works"])}</dd></dl>'
-                + (f'<div class="pf-meters">{meters}</div>' if meters else "")
-                + f'<div class="pf-badges">{badges}</div>' + (f'<ul class="pf-flags">{flags}</ul>' if flags else ""))
-        with st.expander("Script for this promo"):
-            for s in r["segments"]:
-                st.code("\n".join(s["script"]), language=None)
-        a, b, _ = st.columns([1, 1, 4])
-        a.button("Approve", key=f"ap_{key}", on_click=set_verdict, args=(R, r, "approve"),
-                 type="primary" if verdict == "approve" else "secondary", width="stretch")
-        b.button("Reject", key=f"rj_{key}", on_click=set_verdict, args=(R, r, "reject"), width="stretch")
-
-
-# ============================================================================= sidebar
-ss = st.session_state
+st.title('Promo Finder')
+st.html('<div class="pf-intro">Find precise promotional cuts in timestamped screenplays.<br><span class="pf-steps">1. Load screenplay &nbsp; → &nbsp; 2. Find promos &nbsp; → &nbsp; 3. Review recommendations</span></div>')
 with st.sidebar:
-    st.markdown("### Model")
-    names = list(PROVIDER_LABELS)
-    default = "gemini" if secret("GEMINI_API_KEY") else "none"
-    preset = st.selectbox("Provider", names, index=names.index(default), format_func=PROVIDER_LABELS.get)
-    prov, d_model, d_base, env = PRESETS[preset]
-    lim = C.provider_limits(BASE, preset)
-    model = st.text_input("Model", d_model) if preset != "none" else ""
-    base_url = d_base
-    if prov == "openai_compat" and not PUBLIC:      # public: a custom URL could receive the server's key
-        with st.expander("Endpoint"):
-            base_url = st.text_input("Base URL (any OpenAI-compatible API)", d_base)
-    key = ""
-    if env:
-        server_key = secret(env)
-        typed = st.text_input("API key", type="password", help="Kept in this browser session only, never saved.",
-                              placeholder="using the key configured on this machine" if server_key else f"paste {env}")
-        key = typed or server_key
-    workers = st.number_input("Parallel calls", 1, 32, int(lim["workers"]),
-                              help=f"Requests are also capped at {lim['rpm']} per minute for this provider.") if preset != "none" else 1
-
-    st.markdown("### Scope")
-    presets = C.scoring_presets(BASE)
-    main_presets = [p for p in presets if p in PRESET_LABELS] + [p for p in presets if p not in PRESET_LABELS]
-    scoring = st.selectbox("Scoring", main_presets, index=main_presets.index(BASE.scoring_preset) if BASE.scoring_preset in main_presets else 0,
-                           format_func=lambda p: PRESET_LABELS.get(p, p),
-                           help="v4 = the submitted pipeline. v6 = v4 + show profile (works on any show) + needs-context list + "
-                                "stitched safeguards. v5 = every change tried (several hurt on the dev set: see DECISIONS.md).")
-    ep_spec = st.text_input("Episodes", "", placeholder="all  (e.g. 1-10 or 26-50)")
-    top_k = st.slider("Promos to return", 5, 40, BASE.settings.top_k)
-
+    st.caption('Editorial workspace · '+VERSION)
     if PUBLIC:
-        st.caption("Public demo. Uploaded scripts are deleted after each step; results are kept on this server "
-                   "but never listed to other visitors.")
+        st.info('Public demo. Uploaded screenplays are processed for your session only; results are not listed to '
+                'other visitors. Server folders are not accessible.')
     else:
-        st.markdown("### Data")
-    runs = [] if PUBLIC else list_runs()
-    if runs:
-        pick = st.selectbox("Previous runs", runs, format_func=run_label, index=None, placeholder="Open a saved run…")
-        if pick is not None and st.button("Open run", width="stretch"):
-            ss["res"] = load_run(pick)
-            ss["view"] = "review"
-    if not PUBLIC:
-        with st.popover("Clear cache", width="stretch"):
-            st.caption("Deletes saved model answers, so the next run calls the model again. "
-                       "The read-only v4 snapshot is kept, so v4 stays reproducible.")
-            if st.button("Delete cached answers", type="primary"):
-                shutil.rmtree(BASE.cache_dir, ignore_errors=True)
-                BASE.cache_dir.mkdir(parents=True, exist_ok=True)
-                ss.pop("est", None)
-                st.toast("Cache cleared")
+        runs=sorted(RUNS.glob('*/promos.json'),key=lambda p:p.stat().st_mtime,reverse=True)
+        if runs:
+            selected=st.selectbox('Previous runs',runs,index=None,format_func=run_label)
+            if selected and st.button('Open run'):
+                st.session_state['result']=load_run(selected.parent)
+        st.caption('Confidential source and outputs stay on this server. Share only with the permitted audience.')
 
-# ============================================================================= header
-try:
-    episodes_filter = parse_episode_range(ep_spec)
-    range_error = None
-except ValueError as e:
-    episodes_filter, range_error = None, str(e)
-
-has_res = "res" in ss
-source = ss.get("source")
-step = 4 if has_res and ss.get("view") == "review" else (2 if source else 1)
-chips = [PROVIDER_LABELS[preset] + (f" · {model}" if model else ""), PRESET_LABELS.get(scoring, scoring)]
-st.html(f"""<div class="pf-top"><div><div class="pf-word">Promo <em>Finder</em></div>
-<div class="pf-sub">Ranked 20–60 s promos from timestamped microdrama scripts. Every cut lands on a shot change, never mid-line.</div></div>
-<div class="pf-chips">{''.join(f'<span class="pf-chip">{esc(c)}</span>' for c in chips)}</div></div>
-<div class="pf-steps">{''.join(f'<div class="pf-step {"done" if i < step else "on" if i == step else ""}"><b>0{i}</b>{n}</div>'
-                               for i, n in enumerate(["Load scripts", "Check", "Run", "Review"], 1))}</div>""")
-
-# ============================================================================= 1. load
-mode = st.segmented_control("Source", ["Files or .zip", "Folder", "Sample show"], default="Files or .zip",
-                            label_visibility="collapsed") or "Files or .zip"
-if mode == "Folder":
-    files = st.file_uploader("Choose the show's folder", accept_multiple_files="directory", type=["txt", "md"])
-elif mode == "Files or .zip":
-    files = st.file_uploader("One screenplay per episode (.txt or .md), or a .zip of the show folder",
-                             accept_multiple_files=True, type=["txt", "md", "zip"])
+source=None
+current_fingerprint=None
+mode=st.radio('Load screenplay',['Upload files','Sample show'] if PUBLIC else ['Upload files','Sample show','Local folder'],horizontal=True)
+if mode=='Sample show':
+    st.caption('Original synthetic test drama. It does not establish quality on other shows.')
+    source={'kind':'sample','path':str(SAMPLE)}
+elif mode=='Local folder':
+    folder=st.text_input('Folder path',placeholder='/path/to/screenplays')
+    if folder:
+        if Path(folder).is_dir(): source={'kind':'local','path':folder}
+        else: st.error('That folder does not exist.')
 else:
-    files = None
-    st.caption("An original 10-episode drama written for testing (not Kuku content). Use it to rehearse the full flow.")
-local = ""
-if not PUBLIC:                                       # public: never read folders on the server
-    with st.expander("Use a folder on this computer"):
-        local = st.text_input("Folder path", "", label_visibility="collapsed", placeholder="/path/to/show-folder")
+    uploads=st.file_uploader('Episode screenplays: select the files, a whole folder, or one .zip',type=['txt','md','zip'],
+                             accept_multiple_files='directory' if st.toggle('Upload a whole folder',key='folder_mode') else True)
+    if uploads: source={'kind':'upload','files':[(f.name,f.getvalue()) for f in uploads]}
+with st.expander('Supported input format'):
+    st.write('One UTF-8 file per episode, with an episode number and timestamped dialogue or actions. Decimal seconds are supported. Missing end times are flagged for review.')
+    st.code('EPISODE NUMBER: 1\n**ACTION:**\nStart: (00:00.00) | End: (00:02.50)\nThe clock begins counting backwards.\n\n**MARA:**\nStart: (00:02.50) | End: (00:05.00)\nWe have one minute to stop it.',language=None)
 
-if mode == "Sample show":
-    source = {"kind": "sample", "path": str(SAMPLE), "sig": ("sample",), "name": "The CEO's Hidden Wife"}
-elif files:
-    blobs = [(f.name, f.getvalue()) for f in files]
-    zips = [n for n, _ in blobs if n.lower().endswith(".zip")]
-    source = {"kind": "upload", "files": blobs, "sig": tuple((n, len(b)) for n, b in blobs),
-              "name": clean_show_name(Path(zips[0]).stem) if zips else ""}
-elif local.strip():
-    p = Path(local.strip()).expanduser()
-    source = {"kind": "local", "path": str(p), "sig": ("local", str(p)), "name": clean_show_name(p)} if p.exists() else None
-    if not p.exists():
-        st.error("That folder doesn't exist.")
-else:
-    source = None
-ss["source"] = source
+def model_panel():
+    """Per-session provider/model/key for each stage. Keys stay in this browser session's memory only."""
+    overrides,budget={},None
+    default_budget=float(os.getenv('MAX_RUN_COST_USD','2'))
+    with st.expander('Models and API keys (optional)'):
+        st.caption('By default the server\'s models run: '
+                   f"{role_settings('gemini')['model']} for the first pass and {role_settings('claude')['model']} for the final review. "
+                   'You can swap either stage to another provider or model, or use your own key. Keys stay in this browser '
+                   'session only and are never saved, logged or written into results.')
+        for col,role in zip(st.columns(2),('gemini','claude')):
+            d=role_settings(role)
+            with col:
+                st.markdown(f'**{ROLE_LABELS[role]}**')
+                names=['server']+[p for p in PROVIDERS if not (PUBLIC and p=='ollama')]
+                choice=st.selectbox('Provider',names,key=f'prov_{role}',
+                                    format_func=lambda p,d=d:f"Server default ({d['model']})" if p=='server' else PROVIDERS[p])
+                if choice=='server':
+                    key=st.text_input('Your API key (optional)',type='password',key=f'key_{role}',
+                                      help='Leave empty to use the server key for the default model.')
+                    if key:
+                        overrides[role]={'provider':d['provider'],'model':d['model'],'api_key':key,
+                                         'price_in':d['price_in'],'price_out':d['price_out']}
+                    continue
+                preset='openai' if choice=='custom' else choice
+                model=st.text_input('Model',value='' if choice=='custom' else PRESETS[preset][1],key=f'model_{role}_{choice}')
+                base=st.text_input('Endpoint URL',placeholder='https://your-gateway.example/v1',key=f'url_{role}') if choice=='custom' else ''
+                key=st.text_input('API key',type='password',key=f'key_{role}_{choice}',help='Kept in this browser session only.')
+                pin,pout=KNOWN_PRICES.get(model.strip(),(0.0,0.0))
+                a,b=st.columns(2)
+                price_in=a.number_input('Input $ / 1M tokens',min_value=0.0,value=float(pin),step=0.05,format='%.2f',key=f'pin_{role}_{model}')
+                price_out=b.number_input('Output $ / 1M tokens',min_value=0.0,value=float(pout),step=0.05,format='%.2f',key=f'pout_{role}_{model}')
+                if not pin: st.caption('Enter this model\'s prices from the provider\'s pricing page; unknown prices block paid calls.')
+                overrides[role]={'provider':choice,'model':model,'base_url':base,'api_key':key,'price_in':price_in,'price_out':price_out}
+        own_keys=len(overrides)==2 and all(o.get('api_key') for o in overrides.values())
+        if own_keys or not PUBLIC:
+            value=st.number_input('Run budget (USD)',min_value=0.10,max_value=50.0,value=default_budget,step=0.50,key='budget')
+            budget=value if abs(value-default_budget)>1e-9 else None
+        else:
+            st.caption(f'Run budget: ${default_budget:.2f}. Use your own keys for both stages to change it.')
+    return overrides,budget
 
-# ============================================================================= 2. check
-if source is not None:
-    if ss.get("parsed", {}).get("sig") != source["sig"]:
+
+overrides,budget=model_panel()
+# Results for different model settings never share a run folder (the key itself is never part of this tag).
+settings_tag=('-m'+hashlib.sha256(json.dumps({r:{k:v for k,v in o.items() if k!='api_key'} for r,o in overrides.items()},
+                                             sort_keys=True,default=str).encode()+str(budget).encode()).hexdigest()[:8]
+              ) if overrides or budget else ''
+
+if source:
+    try:
         with materialized(source) as folder:
-            eps, rep = parse_show(folder, settings=BASE.settings)
-        ss["parsed"] = {"sig": source["sig"], "episodes": [{"n": e.number, "file": Path(e.path).name, "dur": e.duration,
-                                                           "beats": len(e.beats), "logline": e.logline} for e in eps],
-                        "summary": rep.summary(), "warnings": rep.all_warnings, "unparsed": rep.unparsed}
-        ss.pop("est", None)
-    P = ss["parsed"]
-    eps_meta = [e for e in P["episodes"] if not episodes_filter or e["n"] in episodes_filter]
-    show_name = st.text_input("Show title", source["name"], key=f"title_{source['sig']}",
-                              help="Given to the model as context (titles often hint at the premise). Keep it the same "
-                                   "between runs so cached answers are reused.")
-    st.markdown('<div class="pf-label">Check · before anything is spent</div>', unsafe_allow_html=True)
-    s = P["summary"]
-    if not P["episodes"]:
-        st.html('<div class="pf-note bad">No timestamped beats found. Each beat needs a header such as '
-                '<code>**NAME (Tone):**</code> followed by <code>Start: (00:11.30) | End: (00:13.10)</code>.</div>')
-        st.stop()
-    st.html(stats_html([("episodes" + (f" (of {len(P['episodes'])})" if episodes_filter else ""), str(len(eps_meta))),
-                        ("beats", f"{sum(e['beats'] for e in eps_meta):,}"),
-                        ("minutes of story", f"{sum(e['dur'] for e in eps_meta) / 60:.1f}"),
-                        ("timestamp lines read", f"{s['coverage']:.1%}")]))
-    force = False
-    if range_error:
-        st.html(f'<div class="pf-note bad">Episode range: {esc(range_error)}</div>')
-    if episodes_filter and not eps_meta:
-        st.html('<div class="pf-note bad">No episodes in that range.</div>')
-    if s["coverage"] < BASE.settings.min_coverage:
-        st.html(f'<div class="pf-note bad"><b>{s["unparsed"]} timestamp line(s) could not be read</b> '
-                f'({s["parsed_lines"]}/{s["timestamp_lines"]}). Promos from those beats would be missing. '
-                f'Fix the format, or run anyway.</div>')
-        force = st.checkbox("Run anyway")
-    for w in P["warnings"][:8]:
-        st.html(f'<div class="pf-note">{esc(w)}</div>')
-    with st.expander(f"Episodes detected ({len(P['episodes'])})" + (f" · {len(P['unparsed'])} unread lines" if P["unparsed"] else "")):
-        st.dataframe([{"ep": e["n"], "file": e["file"], "length": fmt(e["dur"]), "beats": e["beats"],
-                       "logline": e["logline"][:120]} for e in P["episodes"]], hide_index=True, width="stretch")
-        if P["unparsed"]:
-            st.dataframe([{"file": f, "line": n, "text": t} for f, n, t in P["unparsed"][:200]], hide_index=True, width="stretch")
-
-    # ------------------------------------------------------------------------- 3. run
-    cfg = C.load(preset=scoring, overrides={"top_k": top_k})
-    llm = C.make_llm(cfg, preset, model, base_url, api_key=key, workers=int(workers))
-    ready = bool(eps_meta) and not range_error and (s["coverage"] >= BASE.settings.min_coverage or force)
-    est = None
-    if llm.enabled and not llm.has_key():
-        st.html(f'<div class="pf-note bad">Add an API key for {esc(PROVIDER_LABELS[preset])} in the sidebar, '
-                f'or choose “Rules only”.</div>')
-        ready = False
-    elif llm.enabled and ready:
-        ekey = (source["sig"], preset, model, base_url, scoring, ep_spec, show_name, top_k)
-        if ss.get("est", {}).get("key") != ekey:
+            current_fingerprint,_=v8.identity(folder)
+            eps,report=parse_show(folder,settings=C.Settings())
+            estimate=v8.estimate(folder,overrides,PUBLIC,budget)
+        st.subheader('Screenplay ready' if eps else 'Check your screenplay')
+        st.write(f"{len(eps)} episodes · {sum(len(e.beats) for e in eps):,} beats · {report.coverage:.1%} timestamp lines parsed")
+        with st.expander('Detected episodes and parsing notes'):
+            st.dataframe([{'Episode':e.number,'Duration':fmt_ts(e.duration),'Beats':len(e.beats)} for e in eps],hide_index=True,width='stretch')
+            for warning in report.all_warnings: st.warning(warning)
+        errors=configuration_errors(overrides,PUBLIC)
+        if errors:
+            st.warning('Finding recommendations is unavailable until the model settings are complete. An offline '
+                       'inspection can still show source boundaries for manual review.')
+            for error in errors: st.caption('• '+error)
+        price=estimate['estimated_cost_usd']
+        st.caption((f"Planning estimate: ${price:.2f} before retries and cache reuse. " if price is not None else 'Cost estimate unavailable: token prices are not configured. ')+f"Run budget: ${estimate['budget_usd']:.2f}. Runtime varies with provider latency.")
+        ready=bool(eps) and report.coverage>=.99
+        find=st.button('Find promos',type='primary',disabled=not ready or bool(errors))
+        inspect=st.button('Inspect boundaries without models',disabled=not ready) if errors else False
+        if find or inspect:
+            status=st.empty()
+            def progress(stage,done,total): status.info(f'{stage} · {done}/{total} completed')
             with materialized(source) as folder:
-                ss["est"] = {"key": ekey, "v": estimate(str(folder), llm, show_name or None, cfg.settings,
-                                                         episodes_filter, force=True)}
-        est = ss["est"]["v"]
-    if est is not None:
-        mins = max(est["calls"] / max(llm.rpm, 0.1), 0.0)
-        cost = f" · about ${est['est_cost_usd']:.2f}" if est["est_cost_usd"] else (" · free tier / price not set" if est["calls"] else "")
-        msg = ("Everything is cached: this run makes <b>no new model calls</b>." if not est["calls"] else
-               f"This run makes <b>{est['calls']}{'+' if est['upper_bound'] else ''} new model calls</b> "
-               f"(~{(est['in_tokens'] + est['out_tokens']) / 1000:.0f}k tokens) · at least {mins:.0f} min at "
-               f"{llm.rpm:g} requests/min{cost}.")
-        st.html(f'<div class="pf-note {"ok" if not est["calls"] else ""}">{msg}</div>')
-    if ss.get("run_state") == "cancelled":
-        st.html('<div class="pf-note">The last run was cancelled. Finished calls are cached, so running again continues where it stopped.</div>')
-        ss["run_state"] = None
+                fingerprint,run_id=v8.identity(folder)
+                # Private runs use stable IDs for resume. Demo sessions do not list each other's results.
+                if PUBLIC:
+                    st.session_state.setdefault('demo_scope',hashlib.sha256(os.urandom(32)).hexdigest()[:12])
+                run_dir=RUNS/(run_id+settings_tag+('-'+st.session_state['demo_scope'] if PUBLIC else '')+('-inspection' if inspect else ''))
+                clients=routes(run_dir,HERE/'.cache'/'v8',overrides,budget) if (overrides or budget) and not inspect else None
+                result,out=v8.run(folder,out=run_dir,progress=progress,inspection=inspect,clients=clients,
+                                  show_name='Synthetic sample' if source['kind']=='sample' else 'Uploaded screenplay' if source['kind']=='upload' else None)
+            st.session_state['result']=load_run(out)
+            status.empty()
+    except (ValueError,OSError,zipfile.BadZipFile) as e:
+        st.error(str(e))
 
-    go = st.button("Find promos", type="primary", disabled=not ready)
-    if go:
-        out_dir = RUNS_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}__{(show_name or 'show')[:24].replace('/', '-').replace(' ', '-')}"
-        llm.log_path = str(out_dir / "llm_calls.jsonl")
-        ss["run_state"] = "running"
-        st.button("Cancel run", key="cancel_btn")          # any click interrupts the run (Streamlit rerun)
-        status = st.empty()
-        bar = st.progress(0.0)
-        preview = st.empty()
-
-        def on_progress(ev: dict):
-            frac = ev["done"] / ev["total"] if ev["total"] else 0.0
-            bar.progress(min(1.0, frac), text=f"{STAGE_LABELS.get(ev['stage'], ev['stage'])}"
-                                                 + (f" · {ev['done']}/{ev['total']}" if ev["total"] else ""))
-            cost = f" · <b>${ev['est_cost']:.3f}</b>" if ev["est_cost"] else ""
-            status.html(f'<div class="pf-run">calls <b>{ev["calls"]}</b> new + <b>{ev["cache_hits"]}</b> cached · '
-                        f'<b>{(ev["tokens_in"] + ev["tokens_out"]) / 1000:.1f}k</b> tokens · <b>{ev["elapsed"]:.0f}s</b>'
-                        f'{cost}{" · retries " + str(ev["retries"]) if ev["retries"] else ""}</div>')
-
-        def on_rules(r: dict):
-            with preview.container():
-                st.markdown('<div class="pf-label">Rules-only preview · the AI ranking replaces it when ready</div>',
-                            unsafe_allow_html=True)
-                for p in r["promos"][:5]:
-                    card(None, promo_dict(p, r["ep_by_num"]), compact=True)
-
-        try:
-            with materialized(source) as folder:
-                res = run(str(folder), llm, show_name or None, cfg.settings, episodes_filter, progress=on_progress,
-                          log=lambda *_: None, on_rules_result=on_rules if llm.enabled else None, force=force,
-                          workers=int(workers),
-                          extra_meta={"scoring_preset": scoring, "source": source["kind"],
-                                      "heldout_sha256": file_sha256(BASE.heldout_path)})
-                write_all(res, out_dir)
-        except ParseCoverageError as e:
-            ss["run_state"] = None
-            st.html(f'<div class="pf-note bad">Only {e.report.coverage:.0%} of timestamp lines could be read. Tick “Run anyway” to continue.</div>')
-            st.stop()
-        except (LLMError, SystemExit, Exception) as e:      # readable message, never a stack trace
-            ss["run_state"] = None
-            title, detail = friendly(e, preset)
-            st.html(f'<div class="pf-note bad"><b>{esc(title)}</b> {esc(detail)}</div>')
-            st.stop()
-        except BaseException:                                # Streamlit interrupt = the user pressed Cancel
-            ss["run_state"] = "cancelled"
-            raise
-        ss["run_state"] = "done"
-        ss["res"] = load_run(out_dir)
-        ss["view"] = "review"
-        preview.empty()
-        st.rerun()
-elif not has_res:
-    st.html('<div class="pf-note">Upload one screenplay per episode (or a .zip), choose a folder, or open the sample '
-            'show. Nothing is sent anywhere until you press <b>Find promos</b>, and you will see the number of model '
-            'calls first.</div>')
-
-# ============================================================================= 4. review
-if has_res:
-    R = ss["res"]
-    m, out = R["meta"], Path(R["out"])
-    st.markdown(f"## {esc(m.get('show', 'Results'))}")
-    u = m.get("llm_usage", {})
-    reviewed = len(R["verdicts"])
-    approved = sum(v == "approve" for v in R["verdicts"].values())
-    st.html(stats_html([("promos", str(len(R["rows"]))), ("need context", str(len(R["ctx"]))),
-                        ("episodes", str(m.get("episodes", "?"))),
-                        ("model calls · cached", f"{u.get('calls', 0)} · {u.get('cache_hits', 0)}"),
-                        ("run time", f"{m.get('seconds', 0):.0f} s"),
-                        ("approved", f"{approved}/{reviewed}" if reviewed else "–")]))
-    st.caption(f"{m.get('model', '?')} · scoring {m.get('scoring_preset', 'v4')} · "
-               + " · ".join(f"{CHECK_LABELS.get(k, k)} {v * 100:.0f}%" for k, v in m.get("check_pass_rates", {}).items()))
-    tabs = st.tabs([f"Main ranking  {len(R['rows'])}", f"Needs context  {len(R['ctx'])}", "Report", "Table",
-                    "Run details", "Downloads"])
-    with tabs[0]:
-        if not R["rows"]:
-            st.info("No promos passed the checks.")
-        for r in R["rows"]:
-            card(R, r)
-    with tabs[1]:
-        st.caption("Strong clips that a stranger may not follow on their own. Good for retargeting viewers who already "
-                   "know the show, or as a starting point an editor can extend with a few seconds of setup.")
-        if not R["ctx"]:
-            st.info("None. This list is used by the v5 'gate' scoring.")
-        for r in R["ctx"]:
-            card(R, r)
-    with tabs[2]:
-        rep = out / "report.html"
-        if rep.exists():   # data: URL -> the report renders in its own sandboxed origin
-            st.iframe(f"data:text/html;base64,{base64.b64encode(rep.read_bytes()).decode()}", height=1100)
+R=st.session_state.get('result')
+if R:
+    data=R['data'];meta=data['meta']
+    st.subheader('Review recommendations')
+    st.caption('Results for '+meta.get('show','screenplay'))
+    if current_fingerprint and current_fingerprint!=meta.get('input_sha256'):
+        st.info('These saved results belong to a different input from the screenplay currently loaded above.')
+    if meta.get('status')!='complete': st.info('This run is incomplete or an offline inspection. Unfinished checks remain in Needs review.')
+    tabs=st.tabs([f"Recommended ({len(data['promos'])})",f"Needs review ({len(data.get('review',[]))})",
+                  f"Rejected ({len(data.get('rejected',[]))})",'Run details','Downloads'])
+    for tab,field in zip(tabs[:3],['promos','review','rejected']):
+        with tab:
+            rows=data.get(field,[])
+            if not rows: st.caption('No clips in this view.')
+            else:
+                st.dataframe([{'Rank':r['rank'],'Episode':', '.join(str(s['episode']) for s in r['segments']),
+                    'Seconds':r['duration_sec'],'Description':r['hook'] or r['final_moment'] or 'Unreviewed source window',
+                    'Editor':R['decisions'].get(r.get('clip_key',r['id']),'not reviewed')} for r in rows],hide_index=True,width='stretch')
+                choice=st.selectbox('Review clip',range(len(rows)),format_func=lambda i,rows=rows:rows[i]['id']+' · '+(rows[i]['hook'] or 'Source window')[:100],key='select_'+field)
+                detail(R,rows[choice])
     with tabs[3]:
-        st.dataframe([{"#": r["rank"], "segments": " + ".join(f"Ep{s['episode']:02d} {s['start']}-{s['end']}" for s in r["segments"]),
-                       "sec": r["duration_sec"], "score": r["score"], "hook": r["hook"], "cliffhanger": r["cliffhanger"],
-                       "why": r["why_it_works"], "verdict": R["verdicts"].get(r["id"], "")} for r in R["rows"]],
-                     hide_index=True, width="stretch")
+        models=meta.get('models',{})
+        st.caption(f"First pass: {models.get('discovery','?')} reads every episode and proposes candidates. Final review: "
+                   f"{models.get('final_judge','?')} judges each shortlisted clip independently. Code validates evidence and timing. "
+                   'No marketing performance is predicted.')
+        st.json(meta)
     with tabs[4]:
-        a, b = st.columns(2)
-        with a:
-            st.markdown('<div class="pf-label">Stage timings (s)</div>', unsafe_allow_html=True)
-            st.dataframe([{"stage": k, "seconds": v} for k, v in m.get("stage_seconds", {}).items()], hide_index=True, width="stretch")
-            st.markdown('<div class="pf-label">Model usage</div>', unsafe_allow_html=True)
-            st.json({k: m.get(k) for k in ("model", "workers", "llm_usage", "miner", "judge", "rerank")}, expanded=False)
-        with b:
-            st.markdown('<div class="pf-label">Parse</div>', unsafe_allow_html=True)
-            st.json(m.get("parse", {}), expanded=False)
-            prof = out / "show_profile.json"
-            if prof.exists():
-                st.markdown('<div class="pf-label">Show profile</div>', unsafe_allow_html=True)
-                st.json(json.loads(prof.read_text()), expanded=False)
-            st.markdown('<div class="pf-label">Prompt versions</div>', unsafe_allow_html=True)
-            st.json(m.get("prompt_versions", {}), expanded=False)
-    with tabs[5]:
-        files_ = [f for f in ("promos.csv", "promos.json", "run_meta.json", "llm_calls.jsonl", "show_profile.json",
-                              "parse_report.json", "report.html", "feedback.jsonl") if (out / f).exists()]
-        cols = st.columns(4)
-        for i, f in enumerate(files_):
-            cols[i % 4].download_button(f, (out / f).read_bytes(), f, width="stretch")
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            for p in out.iterdir():
-                if p.is_file():
-                    z.write(p, p.name)
-        st.download_button("Everything (.zip)", buf.getvalue(), f"{out.name}.zip", type="primary")
+        for name in ('promos.json','promos.csv','report.html','run_meta.json','evaluated.json','discovery.json','llm_calls.jsonl','feedback.jsonl'):
+            path=Path(R['out'])/name
+            if path.exists(): st.download_button('Download results · '+name,path.read_bytes(),file_name=name,key='download_'+name)

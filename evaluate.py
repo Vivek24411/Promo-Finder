@@ -7,7 +7,7 @@
 
 Metrics (K = 10 and 25):
   recall@K     share of gold moments that appear (>= half the moment, or 8 s) in at least one top-K promo
-  precision@K  share of top-K promos that contain at least one gold moment
+  gold_overlap@K  share of top-K promos overlapping selected positive examples; NOT precision or human acceptance
   key@K        share of gold moments whose single key instant (the slap, the line) is inside a top-K promo
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ def score_run(run_dir: Path, moments: list[dict]) -> dict:
         good = [p for p in top if any(covers(p, g) for g in moments)]
         keyh = [g for g in moments if any(shows_key(p, g) for p in top)]
         res[f"recall@{k}"] = (len(hit), n)
-        res[f"precision@{k}"] = (len(good), len(top))
+        res[f"gold_overlap@{k}"] = (len(good), len(top))
         res[f"key@{k}"] = (len(keyh), n)
         if k == 25:
             res["missed"] = [f"{g['id']} Ep{g['episode']}" for g in moments if g not in hit]
@@ -87,7 +87,7 @@ def score_run(run_dir: Path, moments: list[dict]) -> dict:
     return res
 
 
-COLS = ["recall@10", "precision@10", "key@10", "recall@25", "precision@25", "key@25"]
+COLS = ["recall@10", "gold_overlap@10", "key@10", "recall@25", "gold_overlap@25", "key@25"]
 
 
 def print_table(results: list[dict], title: str):

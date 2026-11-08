@@ -196,7 +196,10 @@ class LLM:
                 self._log(tag, h, text, error=str(e))
                 continue
             Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
-            (Path(self.cache_dir) / f"{h}.json").write_text(json.dumps({"model": self.name, "text": text, "usage": usage}))
+            target = Path(self.cache_dir) / f"{h}.json"
+            temporary = target.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+            temporary.write_text(json.dumps({"model": self.name, "text": self._redact(text), "usage": usage}))
+            os.replace(temporary, target)
             self._log(tag, h, text)
             return data
         with self._lock:
@@ -280,7 +283,7 @@ class LLM:
         except (KeyError, IndexError, TypeError):
             raise LLMError(f"unexpected reply shape from {self.base_url}", kind="bad_request") from None
         u = data.get("usage") or {}
-        return text, {"in": u.get("prompt_tokens", 0), "out": u.get("completion_tokens", 0)}
+        return text, {"in": u.get("prompt_tokens", 0), "out": u.get("completion_tokens", 0), "reported": bool(u), "reported_model": data.get("model")}
 
     def _anthropic(self, system: str, user: str, schema: dict | None) -> tuple[str, dict]:
         try:
@@ -292,10 +295,9 @@ class LLM:
         if schema and self.structured == "json_schema":
             output_config["format"] = {"type": "json_schema", "schema": schema}
         try:
-            resp = client.beta.messages.create(
+            resp = client.messages.create(
                 model=self.model, max_tokens=self.max_tokens, system=system,
                 messages=[{"role": "user", "content": user}], output_config=output_config,
-                betas=["server-side-fallback-2026-07-01"], fallbacks="default",
             )
         except anthropic.RateLimitError as e:
             raise _Retryable("HTTP 429 (anthropic)") from e
@@ -310,14 +312,14 @@ class LLM:
         if resp.stop_reason == "refusal":
             raise LLMError("model declined the request (stop_reason=refusal)", kind="refusal")
         text = "".join(b.text for b in resp.content if b.type == "text")
-        return text, {"in": resp.usage.input_tokens, "out": resp.usage.output_tokens}
+        return text, {"in": resp.usage.input_tokens, "out": resp.usage.output_tokens, "reported_model": getattr(resp, "model", None)}
 
     def _log(self, tag, h, text, cached=False, error=None):
         if not self.log_path:
             return
         Path(self.log_path).parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps({"tag": tag, "hash": h, "model": self.name, "cached": cached,
-                           "error": self._redact(error) if error else None, "response": text})
+                           "error": self._redact(error) if error else None, "response": self._redact(text)})
         with self._lock, open(self.log_path, "a") as f:
             f.write(line + "\n")
 

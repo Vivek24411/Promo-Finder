@@ -13,6 +13,7 @@ that happens to end with a colon is never mistaken for a speaker.
 from __future__ import annotations
 
 import re
+from decimal import Decimal
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,13 +36,29 @@ SCRIPT_EXTS = {".txt", ".md"}
 
 
 def to_sec(h: str | None, m: str, s: str) -> float:
-    return (int(h) * 3600 if h else 0) + int(m) * 60 + float(s.replace(",", "."))
+    seconds = Decimal(s.replace(",", "."))
+    if not 0 <= seconds < 60 or (h is not None and not 0 <= int(m) < 60) or -seconds.as_tuple().exponent > 9:
+        raise ValueError("invalid timestamp component or more than nine fractional digits")
+    return float(Decimal(int(h) * 3600 if h else 0) + Decimal(int(m) * 60) + Decimal(s.replace(",", ".")))
+
+
+def _mmss(t: float, places: int) -> str:
+    m, s = divmod(max(t, 0.0), 60)
+    txt = f"{s:0{3 + places}.{places}f}"
+    if txt.startswith("60"):              # 59.96 s formatted to 1 place would read '00:60.0'
+        m, txt = m + 1, f"{0:0{3 + places}.{places}f}"
+    return f"{int(m):02d}:{txt}"
 
 
 def fmt(t: float) -> str:
-    """Seconds -> MM:SS.s (the format editors read in the scripts)."""
-    m, s = divmod(max(t, 0.0), 60)
-    return f"{int(m):02d}:{s:04.1f}"
+    """Seconds -> MM:SS.s, used in model prompts. Byte-identical to v4 (cache keys) except that the
+    minute now rolls over correctly (59.96 s -> '01:00.0', not '00:60.0')."""
+    return _mmss(t, 1)
+
+
+def fmt_ts(t: float) -> str:
+    """Seconds -> MM:SS.ss: the precision the scripts are written in. Used for every exported timestamp."""
+    return _mmss(t, max(2, min(9, -Decimal(str(t)).as_tuple().exponent)))
 
 
 @dataclass
@@ -55,11 +72,13 @@ class Beat:
     speaker: str = ""
     emotion: str = ""  # parenthetical tags, e.g. "Cold, Commanding"
     scene: int = 0
+    timing_inferred: bool = False
     offscreen: bool = False
 
-    def render(self) -> str:
-        """Compact one-line form used in LLM prompts and reports."""
-        t = f"[{self.id} {fmt(self.start)}-{fmt(self.end)}]"
+    def render(self, precise: bool = False) -> str:
+        """Compact one-line form used in LLM prompts (precise=False, cache-stable) and exports (precise=True)."""
+        f = fmt_ts if precise else fmt
+        t = f"[{self.id} {f(self.start)}-{f(self.end)}]"
         if self.kind == "DIALOGUE":
             tag = f" ({self.emotion})" if self.emotion else ""
             return f"{t} {self.speaker}{tag}: {self.text}"
@@ -221,7 +240,11 @@ def parse_episode(path: str | Path, force_number: int | None = None,
             cur_scene.heading = m.group(1).strip()
             continue
         if cur_scene and (m := SCENE_TIME_RE.match(s)):
-            t = to_sec(m.group(2), m.group(3), m.group(4))
+            try:
+                t = to_sec(m.group(2), m.group(3), m.group(4))
+            except ValueError as exc:
+                rep.warnings.append(f"line {i+1}: {exc}")
+                continue
             if m.group(1).lower() == "start":
                 cur_scene.start = t
             else:
@@ -237,8 +260,14 @@ def parse_episode(path: str | Path, force_number: int | None = None,
         if pending is not None:
             if pending["start"] is None and (m := SPAN_RE.match(s)):
                 g = m.groups()
-                pending["start"] = to_sec(g[0], g[1], g[2])
-                pending["end"] = to_sec(g[3], g[4], g[5]) if g[4] is not None else None
+                try:
+                    start = to_sec(g[0], g[1], g[2])
+                    end = to_sec(g[3], g[4], g[5]) if g[4] is not None else None
+                except ValueError as exc:
+                    rep.warnings.append(f"line {i+1}: {exc}")
+                    pending = None
+                    continue
+                pending["start"], pending["end"] = start, end
                 for frac in (g[2], g[5]):
                     if frac and re.search(r"[.,](\d+)$", frac):
                         rep.fractions.append(re.search(r"[.,](\d+)$", frac).group(1))
@@ -265,6 +294,7 @@ def parse_episode(path: str | Path, force_number: int | None = None,
     order = sorted(range(len(raw)), key=lambda k: raw[k]["start"])
     for pos, k in enumerate(order):
         r = raw[k]
+        r["timing_inferred"] = r["end"] is None or r["end"] <= r["start"]
         if r["end"] is None:
             later = [raw[j]["start"] for j in order[pos + 1:] if raw[j]["start"] > r["start"]]
             r["end"] = later[0] if later else r["start"] + 2.0
@@ -280,7 +310,7 @@ def parse_episode(path: str | Path, force_number: int | None = None,
         ep.beats.append(Beat(id=f"e{ep.number:02d}b{i:03d}", episode=ep.number, kind=r["kind"],
                              start=r["start"], end=max(r["end"], r["start"]), text=r["text"],
                              speaker=r["speaker"], emotion=r["emotion"], scene=r["scene"],
-                             offscreen=r["offscreen"]))
+                             offscreen=r["offscreen"], timing_inferred=r["timing_inferred"]))
     return ep
 
 

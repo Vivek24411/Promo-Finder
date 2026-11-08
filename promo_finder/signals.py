@@ -37,11 +37,15 @@ def lexicon(name: str = "v4_legacy", show_words: dict | None = None) -> dict:
     name = resolve_lexicon(name) if name == "v4_legacy" else name
     if name not in lx:
         raise SystemExit(f"Unknown lexicon '{name}' (have: {', '.join(k for k in lx if k != 'shared')})")
-    shared, chosen = lx["shared"], lx[name]
+    shared, chosen = lx["shared"], dict(lx[name])
+    if base := chosen.pop("extends", None):           # e.g. generic_v7 = generic + a few extra patterns
+        chosen = {k: list(lx[base].get(k, [])) + list(chosen.get(k, [])) for k in ("physical", "reveal", "shock_line")}
     out = {
         "physical": [tuple(x) for x in chosen["physical"]],
         "reveal": [tuple(x) for x in chosen["reveal"]],
         "shock_line": [tuple(x) for x in chosen["shock_line"]],
+        "production_cues": shared.get("production_cues", ""),
+        "music_cues": shared.get("music_cues", ""),
         "hot": dict(shared["hot_emotions"]),
         "calm": set(shared["calm_emotions"]),
         "camera": shared["intense_camera"],
@@ -75,8 +79,22 @@ def _is_calm(beat: Beat, lx: dict) -> bool:
     return bool({t.strip().lower() for t in beat.emotion.split(",")} & lx["calm"])
 
 
-def beat_signals(beat: Beat, lx: dict, resolve_on_calm_tone: bool = True) -> dict:
-    """Per-beat scores + human-readable reasons."""
+def is_music_cue(beat: Beat, lx: dict) -> bool:
+    """A sound effect that is only score/music (a swell, a sting): mood, not story."""
+    return beat.kind == "SFX" and bool(lx.get("music_cues")) and bool(re.search(lx["music_cues"], beat.text, re.I))
+
+
+def story_text(beat: Beat, lx: dict) -> str:
+    """Stage-direction text with production cues ('cliffhanger', 'cut to black') removed. Dialogue is untouched."""
+    if beat.kind == "DIALOGUE" or not lx.get("production_cues"):
+        return beat.text
+    return re.sub(lx["production_cues"], " ", beat.text, flags=re.I)
+
+
+def beat_signals(beat: Beat, lx: dict, resolve_on_calm_tone: bool = True, count_production_cues: bool = True) -> dict:
+    """Per-beat scores + human-readable reasons.
+    count_production_cues=False (v7): the cliffhanger score ignores the writers' production notes (the word
+    'cliffhanger', 'cut to black') and music-only sound cues, which describe intent, not what happens."""
     text = beat.text
     phys, ph = _lex(text, lx["physical"])
     rev, rh = _lex(text, lx["reveal"])
@@ -98,7 +116,12 @@ def beat_signals(beat: Beat, lx: dict, resolve_on_calm_tone: bool = True) -> dic
     elif beat.kind == "SFX":
         hook = max(hook, phys)
 
-    cliff, ch = _lex(text, lx["cliff"])
+    if count_production_cues:
+        cliff, ch = _lex(text, lx["cliff"])
+    elif is_music_cue(beat, lx):
+        cliff, ch = 0.0, []
+    else:
+        cliff, ch = _lex(story_text(beat, lx), lx["cliff"])
     if beat.kind == "DIALOGUE":
         if text.rstrip().endswith(("?", "—", "-", "...", "…")):
             cliff = max(cliff, 0.7)
@@ -118,7 +141,15 @@ def beat_signals(beat: Beat, lx: dict, resolve_on_calm_tone: bool = True) -> dic
 
 
 def annotate(episodes, lexicon_name: str = "v4_legacy", show_words: dict | None = None,
-             resolve_on_calm_tone: bool = True) -> dict[str, dict]:
-    """Signals for every beat in the show, keyed by beat id."""
+             resolve_on_calm_tone: bool = True, count_production_cues: bool = True) -> dict[str, dict]:
+    """Signals for every beat in the show, keyed by beat id. `hook_rule`/`cliff_rule` keep the pure rule
+    scores (blend_signals later mixes model tags into `hook`/`cliff`)."""
     lx = lexicon(lexicon_name, show_words)
-    return {b.id: beat_signals(b, lx, resolve_on_calm_tone) for ep in episodes for b in ep.beats}
+    out = {}
+    for ep in episodes:
+        for b in ep.beats:
+            s = beat_signals(b, lx, resolve_on_calm_tone, count_production_cues)
+            s["hook_rule"], s["cliff_rule"] = s["hook"], s["cliff"]
+            s["music_cue"] = is_music_cue(b, lx)
+            out[b.id] = s
+    return out

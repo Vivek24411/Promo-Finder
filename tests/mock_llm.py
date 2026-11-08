@@ -6,6 +6,8 @@ Behaviour is chosen by the MODEL NAME, so any test can ask for a failure mode:
     mock-trailing        JSON + commentary with {braces}    mock-badids    adds invented beat IDs
     mock-429x2           first 2 calls answer 429     mock-503x1      first call answers 503
     mock-timeout         every call sleeps past the client timeout
+    mock-v7missing       v7 judge replies omit the 'ending' section (stays uncertain after retries)
+    mock-v7wrongid       v7 judge replies use a wrong clip_id until the retry note asks again
     mock-latency=0.3     each call takes 0.3 s (any mode can add it, e.g. mock-fenced-latency=0.2)
 Replies are plausible: the miner picks real beat IDs from the prompt, the judge scores every CLIP,
 the profile returns words that occur in the prompt, the reranker returns a full permutation.
@@ -22,7 +24,61 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOOKY = re.compile(r"slap|throw|wine|gun|scream|fired|wife|pregnant|alive|crash|grab|divorce|tears", re.I)
 
 
-def _reply(user: str, rnd: random.Random) -> dict:
+def _judge_v7(user: str, rnd: random.Random, model: str) -> dict:
+    """A plausible v7 judgment that cites real refs from the prompt (and sometimes fails a check)."""
+    cid = re.search(r"Candidate promo (K[0-9A-F]{6})", user).group(1)
+    dur = float(re.search(r"\| ([\d.]+) s \|", user).group(1))
+    refs, seg = [], 0
+    for line in user.splitlines():
+        if line.startswith("=== HARD CUT"):
+            seg += 1
+        elif m := re.match(r"^(B\d+) \+([\d.]+)-([\d.]+)s ", line):
+            refs.append((m.group(1), float(m.group(2)), float(m.group(3)), seg))
+    opening = [r for r, s, e, g in refs if s < 3.0] or [refs[0][0]]
+    final = [r for r, s, e, g in refs if e > dur - 5.0] or [refs[-1][0]]
+    k = rnd.random()
+    if k < 0.15 and len(refs) > 6:
+        ending = {"verdict": "fail", "evidence": [final[-1]], "final_moment": "mock final moment",
+                  "central_question": "mock central question?", "final_moment_type": "resolution",
+                  "open_question": "mock question?", "answered_within_clip": True,
+                  "answered_by": [refs[len(refs) // 2][0]], "reason": "the clip answers its own question"}
+    elif k < 0.22:
+        ending = {"verdict": "uncertain", "evidence": [], "final_moment": "", "open_question": "",
+                  "central_question": "", "final_moment_type": "neutral",
+                  "answered_within_clip": False, "answered_by": [], "reason": "cannot tell"}
+    else:
+        ending = {"verdict": "pass", "evidence": [final[-1]], "final_moment": "mock final moment",
+                  "central_question": "mock central question?", "final_moment_type": "suspense",
+                  "open_question": "mock question?", "answered_within_clip": False, "answered_by": [], "reason": "open"}
+    hook_ok, stand_ok = rnd.random() > 0.15, rnd.random() > 0.2
+    data = {"clip_id": cid,
+            "hook": {"verdict": "pass" if hook_ok else "fail", "evidence": [opening[0]],
+                     "description": "mock opening action", "mechanism": "immediate danger"},
+            "ending": ending,
+            "standalone": {"verdict": "pass" if stand_ok else "fail", "evidence": [refs[0][0]],
+                           "conflict": "mock conflict" if stand_ok else "", "harmless_curiosity": "",
+                           "blocking_confusion": "" if stand_ok else "who is she?"},
+            "scores": {"hook": rnd.randint(6, 9) if hook_ok else rnd.randint(2, 4),
+                       "cliffhanger": rnd.randint(6, 9) if ending["verdict"] == "pass" else rnd.randint(2, 5),
+                       "standalone": rnd.randint(6, 9) if stand_ok else rnd.randint(2, 4)},
+            "why_it_works": "This always performs well on TikTok." if rnd.random() < 0.1 else
+                            "Opens on a confrontation and cuts before the answer.",
+            "limitations": ""}
+    if seg:
+        sides = [next(r for r, s, e, g in refs if g == i) for i in range(seg + 1)]
+        ok = rnd.random() > 0.5
+        data["transition"] = {"verdict": "pass" if ok else "fail", "evidence": sides if ok else [],
+                              "connection": "mock connection" if ok else "", "reason": "" if ok else "unexplained jump"}
+    if "v7missing" in model:
+        del data["ending"]
+    if "v7wrongid" in model and "previous reply was invalid" not in user:
+        data["clip_id"] = "K000000"
+    return data
+
+
+def _reply(user: str, rnd: random.Random, model: str = "mock") -> dict:
+    if "Candidate promo K" in user:
+        return _judge_v7(user, rnd, model)
     if "Order ALL" in user:
         labels = re.findall(r"^CLIP ([A-Z]) \(", user, re.M)
         rnd.shuffle(labels)
@@ -81,7 +137,7 @@ class MockLLM:
                 if "timeout" in model:
                     time.sleep(3)
                 user = body["messages"][-1]["content"]
-                data = _reply(user, random.Random(len(user)))
+                data = _reply(user, random.Random(len(user)), model)
                 if "badids" in model and "hooks" in data:
                     data["hooks"].append({"beat": "e99b999", "strength": 9})
                 text = json.dumps(data)

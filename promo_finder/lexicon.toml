@@ -17,6 +17,9 @@ cliff_text = [
   [0.8, 'ominous|\bsting\b|\bswell\w*|drone|\brumble\w*|\bdread\b|unresolved|tension'],
   [0.7, 'eyes (widen|go wide)|\bfrozen\b|\bstunned\b|horror|\bshock\w*|jaw (drops|tightens)|\bpales?\b'],
 ]
+# v7 (count_production_cues = false): stage directions that announce an ending are NOT story evidence.
+production_cues = 'cliffhanger|cut(s|ting)? to black|smash cut|abrupt(ly)? cut|freeze[- ]frame|end(s|ing)? (of )?the episode'
+music_cues = '\bmusic\w*|melod\w+|orchestra\w*|\bcello\b|\bviolins?\b|\bstrings\b|\bscore\b|soundtrack|\bchords?\b|\bsting\b|\bswell\w*|\bdrone\b'
 resolution_text = 'embrace\w*|\bhug\w*|\bsmil\w+|\blaugh\w*|relief|\bpeace\w*|\bsafe\b|\bsleep\w*|fade[- ]?out|gentle|tender|warmth|\bthank you\b|\bcontent\w*|\bsoftly\b|\bnuzzl\w*|serene|\bcalm\w*'
 threat_line = '\bor (else|you|he|she|i)\b|\bunless\b|\bif you\b|\bbefore (dawn|nightfall|sunrise|the)\b|\bwill (hang|burn|die|pay|regret|be)\b|\bwhen i\b|\bwho (are|is) (you|he|she)\b'
 
@@ -44,4 +47,11 @@ shock_line = [
   [1.0, '''how dare|you('re| are) nothing|worthless|beneath (me|us)|kill (him|her|you)|you('re| are) fired|i('m| am) pregnant'''],
   [0.8, '\bmarry me\b|\bwife\b|\bhusband\b|\bdisgrace\w*|\bshame\w*|\bbeg\b|on your knees|get out|sign the divorce'],
   [0.6, '\bnever\b|\bdie\b|\bdead\b|\bdeath\b|\bsecurity!|\barrest\b'],
+]
+
+[generic_v7]
+# v7 = generic + a few physical verbs it was missing (a snatched or flung object is a visual hook).
+extends = "generic"
+physical = [
+  [0.8, '\bsnatch\w*|\bfl(ing|ings|inging|ung)\b|\bwrench(es|ed|ing)?\b|\byank\w*|\btoss(es|ed|ing)?\b'],
 ]
